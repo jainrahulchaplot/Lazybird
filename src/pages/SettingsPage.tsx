@@ -317,7 +317,7 @@ const getDefaultPrompts = () => ({});
                 label="Client ID (from .env file)"
                 value={formData.gmail_client_id}
                 onChange={(e) => setFormData(prev => ({ ...prev, gmail_client_id: e.target.value }))}
-                placeholder="890083269438-..."
+                placeholder="your-gmail-client-id.apps.googleusercontent.com"
                 icon={Mail}
                 disabled={true}
               />
@@ -326,7 +326,7 @@ const getDefaultPrompts = () => ({});
                 type="password"
                 value={formData.gmail_client_secret}
                 onChange={(e) => setFormData(prev => ({ ...prev, gmail_client_secret: e.target.value }))}
-                placeholder="GOCSPX-..."
+                placeholder="your-gmail-client-secret"
                 icon={Key}
                 disabled={true}
               />
