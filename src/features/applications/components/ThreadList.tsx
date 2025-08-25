@@ -145,7 +145,7 @@ export const ThreadList: React.FC<ThreadListProps> = ({
               </div>
             )}
           </div>
-        ))}
+        ))
       </div>
         ))}
       </div>
