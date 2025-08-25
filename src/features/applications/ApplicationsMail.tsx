@@ -1,0 +1,389 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { RefreshCw, Filter } from 'lucide-react';
+import { Button } from '../../components/ui/Button';
+import { LeadMultiSelect } from './components/LeadMultiSelect';
+import { ThreadList } from './components/ThreadList';
+import { ThreadView } from './components/ThreadView';
+import { AutoFollowupAgent } from './components/AutoFollowupAgent';
+import { Composer } from './components/Composer';
+import { Lead, Thread, ThreadSummary, Attachment, Message } from '../../lib/types/applications';
+import { leadsApi } from '../../lib/api/leads';
+import { gmailApi } from '../../lib/api/gmail';
+import { aiApi } from '../../lib/api/ai';
+import { mailCache } from '../../lib/cache/mailCache';
+
+// No more mock data - using real APIs
+
+export const ApplicationsMail: React.FC = () => {
+  console.log('ApplicationsMail component rendering');
+  
+  // State
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
+  const [threads, setThreads] = useState<ThreadSummary[]>([]);
+  const [selectedThread, setSelectedThread] = useState<Thread | null>(null);
+  
+  // Debug: Log state changes
+  useEffect(() => {
+    console.log('selectedThread state changed:', selectedThread);
+  }, [selectedThread]);
+  const [loading, setLoading] = useState(false);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState<string>('');
+  const [cacheInitialized, setCacheInitialized] = useState(false);
+
+  // Initialize cache and load data on mount
+  useEffect(() => {
+    const initializeCache = async () => {
+      try {
+        // Load cached summaries immediately for instant UI
+        const cachedSummaries = await mailCache.getSummaries();
+        if (cachedSummaries.length > 0) {
+          setThreads(cachedSummaries);
+          setCacheInitialized(true);
+          
+          // Get last refresh time
+          const meta = await mailCache.getMeta();
+          if (meta.lastRefreshISO) {
+            setLastRefreshTime(meta.lastRefreshISO);
+          }
+        }
+        
+        // Load leads
+        const fetchedLeads = await leadsApi.getLeads();
+        setLeads(fetchedLeads);
+        
+        // If no cache, fetch initial threads
+        if (cachedSummaries.length === 0) {
+          const fetchedThreads = await gmailApi.getSentThreads([]);
+          setThreads(fetchedThreads);
+          
+          // Cache the summaries
+          await mailCache.setSummaries(fetchedThreads);
+          await mailCache.updateMeta({ lastRefreshISO: new Date().toISOString() });
+          setLastRefreshTime(new Date().toISOString());
+        }
+        
+        setCacheInitialized(true);
+      } catch (error) {
+        console.error('Failed to initialize cache:', error);
+        // Fallback to direct API call
+        try {
+          const fetchedThreads = await gmailApi.getSentThreads([]);
+          setThreads(fetchedThreads);
+        } catch (fallbackError) {
+          console.error('Fallback also failed:', fallbackError);
+          setThreads([]);
+        }
+      }
+    };
+    
+    initializeCache();
+  }, []);
+
+  // Filter threads based on selected leads (no API calls, just client-side filtering)
+  const filteredThreads = useMemo(() => {
+    if (selectedLeadIds.length === 0) {
+      return threads;
+    }
+    
+    return threads.filter(thread => {
+      // Check if any of the thread's recipients match the selected leads
+      return thread.recipients.some(recipient => 
+        selectedLeadIds.some(leadId => {
+          const lead = leads.find(l => l.id === leadId);
+          return lead && recipient.email === lead.email;
+        })
+      );
+    });
+  }, [threads, selectedLeadIds, leads]);
+
+  // Load thread details when selected
+  const handleThreadSelect = useCallback(async (threadId: string) => {
+    console.log('handleThreadSelect called with threadId:', threadId);
+    setThreadLoading(true);
+    setSelectedThread(null); // Clear previous selection immediately
+    
+    try {
+      // Check cache first
+      let thread = await mailCache.getThread(threadId);
+      console.log('Thread from cache:', thread);
+      
+      // Force fresh API call for debugging
+      console.log('🔄 Force fetching thread from API for debugging...');
+      thread = await gmailApi.getThread(threadId);
+      console.log('Thread from API:', thread);
+      
+      if (thread) {
+        // Validate thread structure
+        if (!thread.id || !thread.messages || !Array.isArray(thread.messages)) {
+          console.error('Invalid thread structure:', thread);
+          setSelectedThread(null);
+          return;
+        }
+        // Cache the thread
+        await mailCache.setThread(thread);
+      }
+      
+      if (thread) {
+        console.log('Setting selected thread:', {
+          id: thread.id,
+          subject: thread.subject,
+          messagesCount: thread.messages?.length || 0,
+          messages: thread.messages,
+          recipients: thread.recipients
+        });
+        console.log('Thread messages count:', thread.messages?.length || 0);
+        setSelectedThread(thread);
+      } else {
+        console.log('No thread found, setting to null');
+        setSelectedThread(null);
+      }
+    } catch (error) {
+      console.error('Failed to load thread:', error);
+      // Show error state
+      setSelectedThread(null);
+    } finally {
+      setThreadLoading(false);
+    }
+  }, []);
+
+  // Handle sending email
+  const handleSendEmail = useCallback(async (content: string, attachments: Attachment[]) => {
+    if (!selectedThread) return;
+
+    try {
+      await gmailApi.sendEmail({
+        threadId: selectedThread.id,
+        to: selectedThread.recipients,
+        subject: selectedThread.subject,
+        html: content,
+        attachments: attachments.map(att => ({
+          name: att.filename,
+          mimeType: att.mimeType,
+          dataBase64: '' // TODO: Convert file to base64 when implementing file uploads
+        }))
+      });
+
+      // Refresh thread list to show the new message
+      const currentThreads = await gmailApi.getSentThreads(selectedLeadIds);
+      setThreads(currentThreads);
+      
+      // Refresh current thread
+      const updatedThread = await gmailApi.getThread(selectedThread.id);
+      setSelectedThread(updatedThread);
+      
+    } catch (error) {
+      console.error('Failed to send email:', error);
+      throw error;
+    }
+  }, [selectedThread, selectedLeadIds]);
+
+  // Handle AI generation
+  const handleGenerateAI = useCallback(async (): Promise<string> => {
+    if (!selectedThread) throw new Error('No thread selected');
+
+    try {
+      const response = await aiApi.draftReply({
+        threadId: selectedThread.id,
+        style: 'followup',
+        maxMessages: 5
+      });
+      return response.draft;
+    } catch (error) {
+      console.error('Failed to generate AI draft:', error);
+      throw error;
+    }
+  }, [selectedThread]);
+
+  // Handle manual refresh - now fetches COMPLETE threads including incoming replies
+  const handleRefresh = useCallback(async () => {
+    if (!cacheInitialized) return;
+    
+    setLoading(true);
+    try {
+      console.log('🔄 Starting complete refresh to get all threads including incoming replies...');
+      
+      // Always fetch complete threads for full refresh (not just delta)
+      const completeThreads = await gmailApi.getCompleteThreads(selectedLeadIds);
+      console.log('✅ Complete threads fetched:', completeThreads.length);
+      
+      // Update state and cache with complete data
+      setThreads(completeThreads);
+      await mailCache.setSummaries(completeThreads);
+      await mailCache.updateMeta({ lastRefreshISO: new Date().toISOString() });
+      setLastRefreshTime(new Date().toISOString());
+      
+      // Queue background prefetch for all threads to get full details
+      const allThreadIds = completeThreads.map(t => t.id);
+      if (allThreadIds.length > 0) {
+        console.log('🔄 Queueing prefetch for', allThreadIds.length, 'threads');
+        mailCache.queuePrefetch(allThreadIds);
+      }
+      
+      // If there's a selected thread, refresh it to get updated message count
+      if (selectedThread) {
+        console.log('🔄 Refreshing selected thread:', selectedThread.id);
+        try {
+          const updatedThread = await gmailApi.getThread(selectedThread.id);
+          setSelectedThread(updatedThread);
+          await mailCache.setThread(updatedThread);
+          console.log('✅ Selected thread refreshed with', updatedThread.messages?.length, 'messages');
+        } catch (error) {
+          console.warn('⚠️ Could not refresh selected thread:', error);
+        }
+      }
+      
+      console.log('✅ Complete refresh finished successfully');
+      
+    } catch (error) {
+      console.error('❌ Refresh failed:', error);
+      toast.error('Failed to refresh emails. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [cacheInitialized, selectedLeadIds, mailCache, gmailApi]);
+
+  // Format last refresh time
+  const formatLastRefresh = useCallback((isoString: string) => {
+    if (!isoString) return '';
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  }, []);
+
+  // Handle load more (for pagination)
+  const handleLoadMore = useCallback(() => {
+    // TODO: Implement pagination when backend supports it
+    console.log('Load more clicked');
+  }, []);
+
+  // Handle reply all
+  const handleReplyAll = useCallback(() => {
+    // Focus the composer
+    // This will be handled by the composer component
+  }, []);
+
+  return (
+    <div className="flex h-screen bg-gray-50">
+      {/* Left Sidebar - Thread List */}
+      <div className="w-96 border-r border-gray-200 bg-white flex flex-col">
+        {/* Header */}
+        <div className="p-4 border-b border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-4">
+              <Button
+                onClick={handleRefresh}
+                disabled={loading || !cacheInitialized}
+                className="flex items-center gap-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                {loading ? 'Refreshing...' : 'Refresh All'}
+              </Button>
+              {lastRefreshTime && (
+                <span className="text-xs text-gray-500">
+                  synced {formatLastRefresh(lastRefreshTime)}
+                </span>
+              )}
+              {/* Show thread count */}
+              <span className="text-xs text-gray-500">
+                {threads.length} thread{threads.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+          </div>
+
+          {/* Lead filter */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Filter className="w-4 h-4" />
+              <span>Filter by leads</span>
+            </div>
+            <LeadMultiSelect
+              leads={leads}
+              selectedLeadIds={selectedLeadIds}
+              onSelectionChange={setSelectedLeadIds}
+              placeholder="All leads"
+            />
+          </div>
+        </div>
+
+        {/* Thread list */}
+        <div className="flex-1">
+          <ThreadList
+            threads={filteredThreads}
+            selectedThreadId={selectedThread?.id}
+            onThreadSelect={handleThreadSelect}
+            loading={loading}
+            hasMore={hasMore}
+            onLoadMore={handleLoadMore}
+          />
+        </div>
+      </div>
+
+      {/* Right Panel - Thread View + Composer */}
+      <div className="flex-1 bg-white flex flex-col">
+        {console.log('Rendering right panel, selectedThread:', {
+          id: selectedThread?.id,
+          subject: selectedThread?.subject,
+          messagesCount: selectedThread?.messages?.length || 0,
+          messages: selectedThread?.messages,
+          recipients: selectedThread?.recipients
+        })}
+        {selectedThread ? (
+          <>
+            {/* Thread view */}
+            <div className="flex-1 overflow-hidden">
+              {console.log('🔍 Passing to ThreadView:', {
+                threadId: selectedThread.id,
+                subject: selectedThread.subject,
+                messagesCount: selectedThread.messages?.length || 0,
+                messages: selectedThread.messages,
+                recipients: selectedThread.recipients
+              })}
+              <ThreadView
+                threadId={selectedThread.id}
+                subject={selectedThread.subject}
+                messages={selectedThread.messages}
+                recipients={selectedThread.recipients}
+                onReplyAll={handleReplyAll}
+              />
+            </div>
+
+            {/* Auto Follow-up Agent */}
+            <AutoFollowupAgent
+              threadId={selectedThread.id}
+              leadId={selectedThread.leadId}
+            />
+
+            {/* Composer */}
+            <Composer
+              threadId={selectedThread.id}
+              recipients={selectedThread.recipients}
+              subject={selectedThread.subject}
+              onSend={handleSendEmail}
+              onGenerateAI={handleGenerateAI}
+              disabled={threadLoading}
+            />
+          </>
+        ) : (
+          <div className="h-full flex items-center justify-center text-gray-500">
+            <div className="text-center">
+              <div className="text-6xl mb-4">📧</div>
+              <p className="text-lg">Select a thread to view details</p>
+              <p className="text-sm text-gray-400 mt-2">selectedThread: {JSON.stringify(selectedThread)}</p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};

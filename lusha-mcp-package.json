@@ -1,0 +1,30 @@
+{
+  "name": "lusha-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for Lusha sales intelligence API integration",
+  "main": "lusha-mcp-server.js",
+  "bin": {
+    "lusha-mcp": "./lusha-mcp-server.js"
+  },
+  "scripts": {
+    "start": "node lusha-mcp-server.js",
+    "dev": "node lusha-mcp-server.js"
+  },
+  "keywords": [
+    "mcp",
+    "lusha",
+    "sales-intelligence",
+    "contact-finding",
+    "company-enrichment",
+    "model-context-protocol"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "dependencies": {
+    "mcp-framework": "^0.2.15",
+    "axios": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
