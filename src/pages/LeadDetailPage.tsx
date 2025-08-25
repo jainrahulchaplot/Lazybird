@@ -647,6 +647,38 @@ export const LeadDetailPage: React.FC<LeadDetailPageProps> = ({ leadId, onBack }
     }
   };
 
+  const handleDeleteApplication = async (threadId: string) => {
+    if (!confirm('Are you sure you want to delete this application thread? This will permanently remove all messages and cannot be undone.')) return;
+    
+    try {
+      // Find the application that matches this thread
+      const app = applications.find(a => a.threadId === threadId);
+      if (!app) {
+        toast.error('Application not found');
+        return;
+      }
+      
+      // Delete the message thread
+      const { error } = await db.deleteMessageThread(threadId);
+      if (error) {
+        toast.error(`Failed to delete thread: ${error}`);
+        return;
+      }
+      
+      // Remove from local state
+      setApplications(prev => prev.filter(a => a.threadId !== threadId));
+      
+      // Clear selected thread if it was the deleted one
+      if (selectedThread?.id === threadId) {
+        setSelectedThread(null);
+      }
+      
+      toast.success('Application thread deleted successfully');
+    } catch (err) {
+      toast.error('Failed to delete application thread');
+    }
+  };
+
   // Lusha enrichment modal state
   const [lushaModalOpen, setLushaModalOpen] = useState(false);
   const [lushaContacts, setLushaContacts] = useState<any[]>([]);
@@ -1527,18 +1559,32 @@ export const LeadDetailPage: React.FC<LeadDetailPageProps> = ({ leadId, onBack }
                   {applications.slice(0, 5).map((app, index) => (
                     <div 
                       key={index}
-                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 cursor-pointer"
-                      onClick={() => loadThread(app.threadId)}
+                      className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50"
                     >
-                      <div className="flex-1">
+                      <div 
+                        className="flex-1 cursor-pointer"
+                        onClick={() => loadThread(app.threadId)}
+                      >
                         <div className="font-medium text-gray-900">{app.subject}</div>
                         <div className="text-sm text-gray-600">{app.to}</div>
                         <div className="text-xs text-gray-500">{new Date(app.date).toLocaleDateString()}</div>
                       </div>
-                      <div className="text-right">
+                      <div className="flex items-center gap-2">
                         <Badge variant={app.status === 'sent' ? 'success' : 'default'} size="sm">
                           {app.status}
                         </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          icon={X}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteApplication(app.threadId);
+                          }}
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          Delete
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -1659,19 +1705,37 @@ export const LeadDetailPage: React.FC<LeadDetailPageProps> = ({ leadId, onBack }
                     {applications.map((app, index) => (
                       <div 
                         key={index}
-                        className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                        className={`p-3 border rounded-lg transition-colors ${
                           selectedThread?.id === app.threadId ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200 hover:bg-gray-100"
                         }`}
-                        onClick={() => loadThread(app.threadId)}
                       >
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium text-sm text-gray-900">{app.subject}</span>
-                          <Badge variant={app.status === 'sent' ? 'success' : 'default'} size="sm">
-                            {app.status}
-                          </Badge>
+                        <div 
+                          className="cursor-pointer"
+                          onClick={() => loadThread(app.threadId)}
+                        >
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-medium text-sm text-gray-900">{app.subject}</span>
+                            <Badge variant={app.status === 'sent' ? 'success' : 'default'} size="sm">
+                              {app.status}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-gray-700 mb-1 line-clamp-2">{app.to}</p>
+                          <p className="text-xs text-gray-500">{new Date(app.date).toLocaleDateString()}</p>
                         </div>
-                        <p className="text-sm text-gray-700 mb-1 line-clamp-2">{app.to}</p>
-                        <p className="text-xs text-gray-500">{new Date(app.date).toLocaleDateString()}</p>
+                        <div className="flex justify-end mt-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            icon={X}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteApplication(app.threadId);
+                            }}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          >
+                            Delete
+                          </Button>
+                        </div>
                       </div>
                     ))}
                   </div>

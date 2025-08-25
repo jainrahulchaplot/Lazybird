@@ -661,7 +661,7 @@ app.post('/api/generate-content', async (req, res) => {
 // FIXED: Image -> JSON -> (optional) Lead
 app.post('/api/openai/process-image', async (req, res) => {
   const ROUTE = '/api/openai/process-image';
-  const reqId = Math.random().toString(36).slice(2, 8);
+  const reqId = Math.random().toString(36).slice(2);
   console.log(`[${reqId}] ${ROUTE} start`);
 
   // Force JSON output schema so we never need to brittle-parse prose
@@ -5650,4 +5650,174 @@ app.use('*', (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 Backend server running on port ${PORT}`);
   console.log(`📡 Health check: http://localhost:${PORT}/api/health`);
+});
+
+/* --------------------------- DELETE ENDPOINTS ------------------------- */
+
+// Delete a lead and all related data
+app.delete('/api/leads/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`🗑️ DELETE /api/leads/${id} -> deleting lead and all related data`);
+    
+    // Delete in order due to foreign key constraints
+    // 1. Delete messages (via applications)
+    const { data: applications } = await supabase
+      .from('applications')
+      .select('id')
+      .eq('lead_id', id);
+    
+    if (applications && applications.length > 0) {
+      const applicationIds = applications.map(app => app.id);
+      
+      // Delete messages
+      const { error: messagesError } = await supabase
+        .from('messages')
+        .delete()
+        .in('application_id', applicationIds);
+      
+      if (messagesError) {
+        console.error('❌ Error deleting messages:', messagesError);
+      }
+      
+      // Delete application_contacts
+      const { error: appContactsError } = await supabase
+        .from('application_contacts')
+        .delete()
+        .in('application_id', applicationIds);
+      
+      if (appContactsError) {
+        console.error('❌ Error deleting application_contacts:', appContactsError);
+      }
+      
+      // Delete applications
+      const { error: applicationsError } = await supabase
+        .from('applications')
+        .delete()
+        .eq('lead_id', id);
+      
+      if (applicationsError) {
+        console.error('❌ Error deleting applications:', applicationsError);
+      }
+    }
+    
+    // 2. Delete contacts
+    const { error: contactsError } = await supabase
+      .from('contacts')
+      .delete()
+      .eq('lead_id', id);
+    
+    if (contactsError) {
+      console.error('❌ Error deleting contacts:', contactsError);
+    }
+    
+    // 3. Delete artifacts
+    const { error: artifactsError } = await supabase
+      .from('artifacts')
+      .delete()
+      .eq('lead_id', id);
+    
+    if (artifactsError) {
+      console.error('❌ Error deleting artifacts:', artifactsError);
+    }
+    
+    // 4. Delete files
+    const { error: filesError } = await supabase
+      .from('files')
+      .delete()
+      .eq('linked_lead_id', id);
+    
+    if (filesError) {
+      console.error('❌ Error deleting files:', filesError);
+    }
+    
+    // 5. Finally delete the lead
+    const { error: leadError } = await supabase
+      .from('leads')
+      .delete()
+      .eq('id', id);
+    
+    if (leadError) {
+      console.error('❌ Error deleting lead:', leadError);
+      return res.status(500).json({ success: false, error: leadError.message });
+    }
+    
+    console.log(`✅ Lead ${id} and all related data deleted successfully`);
+    res.json({ success: true, message: 'Lead and all related data deleted successfully' });
+    
+  } catch (error) {
+    console.error('💥 Error deleting lead:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to delete lead' });
+  }
+});
+
+// Delete a specific application and its messages
+app.delete('/api/applications/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`🗑️ DELETE /api/applications/${id} -> deleting application and messages`);
+    
+    // Delete messages first
+    const { error: messagesError } = await supabase
+      .from('messages')
+      .delete()
+      .eq('application_id', id);
+    
+    if (messagesError) {
+      console.error('❌ Error deleting messages:', messagesError);
+    }
+    
+    // Delete application_contacts
+    const { error: appContactsError } = await supabase
+      .from('application_contacts')
+      .delete()
+      .eq('application_id', id);
+    
+    if (appContactsError) {
+      console.error('❌ Error deleting application_contacts:', appContactsError);
+    }
+    
+    // Delete the application
+    const { error: applicationError } = await supabase
+      .from('applications')
+      .delete()
+      .eq('id', id);
+    
+    if (applicationError) {
+      console.error('❌ Error deleting application:', applicationError);
+      return res.status(500).json({ success: false, error: applicationError.message });
+    }
+    
+    console.log(`✅ Application ${id} and messages deleted successfully`);
+    res.json({ success: true, message: 'Application and messages deleted successfully' });
+    
+  } catch (error) {
+    console.error('💥 Error deleting application:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to delete application' });
+  }
+});
+
+// Delete a specific message thread
+app.delete('/api/messages/:applicationId', async (req, res) => {
+  try {
+    const { applicationId } = req.params;
+    console.log(`🗑️ DELETE /api/messages/${applicationId} -> deleting all messages for application`);
+    
+    const { error: messagesError } = await supabase
+      .from('messages')
+      .delete()
+      .eq('application_id', applicationId);
+    
+    if (messagesError) {
+      console.error('❌ Error deleting messages:', messagesError);
+      return res.status(500).json({ success: false, error: messagesError.message });
+    }
+    
+    console.log(`✅ All messages for application ${applicationId} deleted successfully`);
+    res.json({ success: true, message: 'Message thread deleted successfully' });
+    
+  } catch (error) {
+    console.error('💥 Error deleting messages:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to delete messages' });
+  }
 });

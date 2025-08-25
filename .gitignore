@@ -7,18 +7,49 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
+# Node modules
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+
+# Local environment files (secrets)
+.env
+.env.local
+.env.*.local
 *.local
 
 # Editor directories and files
-.vscode/*
+.vscode/
 !.vscode/extensions.json
-.idea
-.DS_Store
+.idea/
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+.DS_Store
+fix_gmail_oauth.html
+
+# Secrets & keys
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+*.jks
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+
+# Other
+coverage/
+reports/
+*.tgz

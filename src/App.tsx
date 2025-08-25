@@ -168,8 +168,8 @@ function AppContent() {
         return 'Workspace';
       case currentPath.startsWith('/leads'):
         return 'Leads';
-      case currentPath.startsWith('/studio'):
-        return 'Content Studio';
+      // case currentPath.startsWith('/studio'):
+      //   return 'Content Studio';
       case currentPath.startsWith('/applications'):
         return 'Applications';
       case currentPath.startsWith('/settings'):
@@ -185,8 +185,8 @@ function AppContent() {
         return 'Manage your profile, resumes, and content snippets';
       case currentPath.startsWith('/leads'):
         return 'Capture and enrich job opportunities';
-      case currentPath.startsWith('/studio'):
-        return 'Generate AI-powered content for applications';
+      // case currentPath.startsWith('/studio'):
+      //   return 'Generate AI-powered content for applications';
       case currentPath.startsWith('/applications'):
         return 'Track applications and manage follow-ups';
       case currentPath.startsWith('/settings'):
@@ -228,13 +228,13 @@ function AppContent() {
         return (
           <KnowledgeBasePage />
         );
-      case '/studio':
-        return (
-          <div className="text-center py-20">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Content Studio</h2>
-            <p className="text-gray-600 mb-8">Coming soon - AI-powered content generation for cover letters and emails</p>
-          </div>
-        );
+      // case '/studio':
+      //   return (
+      //     <div className="text-center py-20">
+      //       <h2 className="text-2xl font-bold text-gray-900 mb-4">Content Studio</h2>
+      //       <p className="text-gray-600 mb-8">Coming soon - AI-powered content generation for cover letters and emails</p>
+      //     </div>
+      //   );
       case '/applications':
         return <ApplicationsMail />;
       case '/settings':

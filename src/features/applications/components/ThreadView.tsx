@@ -9,6 +9,7 @@ interface ThreadViewProps {
   messages: Message[];
   recipients: EmailAddress[];
   onReplyAll: () => void;
+  onDelete?: () => void;
 }
 
 export const ThreadView: React.FC<ThreadViewProps> = ({
@@ -16,7 +17,8 @@ export const ThreadView: React.FC<ThreadViewProps> = ({
   subject,
   messages,
   recipients,
-  onReplyAll
+  onReplyAll,
+  onDelete
 }) => {
   // Debug logging
   console.log('ThreadView rendering with props:', { 
@@ -238,12 +240,22 @@ export const ThreadView: React.FC<ThreadViewProps> = ({
             </div>
           </div>
 
-          <button
-            onClick={onReplyAll}
-            className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-          >
-            Reply All
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={onReplyAll}
+              className="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+            >
+              Reply All
+            </button>
+            {onDelete && (
+              <button
+                onClick={onDelete}
+                className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors"
+              >
+                Delete Thread
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

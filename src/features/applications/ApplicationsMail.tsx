@@ -33,6 +33,34 @@ export const ApplicationsMail: React.FC = () => {
   const [lastRefreshTime, setLastRefreshTime] = useState<string>('');
   const [cacheInitialized, setCacheInitialized] = useState(false);
 
+  // Delete thread handler
+  const handleDeleteThread = async (threadId: string) => {
+    if (!confirm('Are you sure you want to delete this thread? This will permanently remove the thread and all its messages.')) {
+      return;
+    }
+
+    try {
+      // Remove from local state immediately for better UX
+      setThreads(prev => prev.filter(thread => thread.id !== threadId));
+      
+      // Clear selected thread if it was the deleted one
+      if (selectedThread?.id === threadId) {
+        setSelectedThread(null);
+      }
+      
+      // Update cache
+      await mailCache.setSummaries(threads.filter(thread => thread.id !== threadId));
+      
+      // Note: We're not actually deleting from Gmail here, just removing from our local cache
+      // If you want to delete from Gmail as well, you'd need to call the Gmail API
+      console.log(`Thread ${threadId} removed from local cache`);
+    } catch (error) {
+      console.error('Failed to delete thread:', error);
+      // Revert the state change if there was an error
+      // You might want to show a toast notification here
+    }
+  };
+
   // Initialize cache and load data on mount
   useEffect(() => {
     const initializeCache = async () => {
@@ -322,6 +350,7 @@ export const ApplicationsMail: React.FC = () => {
             threads={filteredThreads}
             selectedThreadId={selectedThread?.id}
             onThreadSelect={handleThreadSelect}
+            onDeleteThread={handleDeleteThread}
             loading={loading}
             hasMore={hasMore}
             onLoadMore={handleLoadMore}
@@ -355,6 +384,7 @@ export const ApplicationsMail: React.FC = () => {
                 messages={selectedThread.messages}
                 recipients={selectedThread.recipients}
                 onReplyAll={handleReplyAll}
+                onDelete={() => handleDeleteThread(selectedThread.id)}
               />
             </div>
 

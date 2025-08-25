@@ -18,7 +18,7 @@ const navItems = [
   { id: 'leads', label: 'Leads', icon: Target, href: '/leads' },
   { id: 'workspace', label: 'Workspace', icon: Users, href: '/workspace' },
   { id: 'knowledge', label: 'Knowledge Base', icon: Brain, href: '/knowledge' },
-  { id: 'studio', label: 'Content Studio', icon: Palette, href: '/studio' },
+  // { id: 'studio', label: 'Content Studio', icon: Palette, href: '/studio' },
   { id: 'ai-config', label: 'AI Configurations', icon: Sparkles, href: '/ai-config' },
   { id: 'settings', label: 'Settings', icon: Settings, href: '/settings' },
 ];

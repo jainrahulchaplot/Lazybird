@@ -227,6 +227,29 @@ export const db = {
     }
   },
 
+  // Delete functions
+  async deleteLead(id: string) {
+    try {
+      const response = await fetch(`http://localhost:3001/api/leads/${id}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      if (data.success) {
+        return { data: data.message, error: null };
+      } else {
+        return { data: null, error: data.error || 'Failed to delete lead' };
+      }
+    } catch (error: unknown) {
+      console.error('Failed to delete lead:', error);
+      return { data: null, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  },
+
   // Contacts
   async createContact(contact: any) {
     const response = await supabase
@@ -287,6 +310,29 @@ export const db = {
     return handleSupabaseResponse(response);
   },
 
+  // Delete functions
+  async deleteApplication(id: string) {
+    try {
+      const response = await fetch(`http://localhost:3001/api/applications/${id}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      if (data.success) {
+        return { data: data.message, error: null };
+      } else {
+        return { data: null, error: data.error || 'Failed to delete application' };
+      }
+    } catch (error: unknown) {
+      console.error('Failed to delete application:', error);
+      return { data: null, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  },
+
   // Messages
   async createMessage(message: any) {
     const response = await supabase
@@ -295,6 +341,29 @@ export const db = {
       .select()
       .single();
     return handleSupabaseResponse(response);
+  },
+
+  // Delete functions
+  async deleteMessageThread(applicationId: string) {
+    try {
+      const response = await fetch(`http://localhost:3001/api/messages/${applicationId}`, {
+        method: 'DELETE',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      if (data.success) {
+        return { data: data.message, error: null };
+      } else {
+        return { data: null, error: data.error || 'Failed to delete message thread' };
+      }
+    } catch (error: unknown) {
+      console.error('Failed to delete message thread:', error);
+      return { data: null, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
   },
 
   // Artifacts

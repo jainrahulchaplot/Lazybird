@@ -245,18 +245,18 @@ export const LeadsPage: React.FC<LeadsPageProps> = ({ onNavigate }) => {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this lead?')) return;
+    if (!confirm('Are you sure you want to delete this lead? This will permanently remove the lead and all related data (applications, contacts, messages, etc.).')) return;
 
     try {
-      const { error } = await db.updateLead(id, { status: 'archived' });
+      const { error } = await db.deleteLead(id);
       if (error) {
-        toast.error('Failed to archive lead');
+        toast.error(`Failed to delete lead: ${error}`);
         return;
       }
-      setLeads(prev => prev.map(l => l.id === id ? { ...l, status: 'archived' } : l));
-      toast.success('Lead archived');
+      setLeads(prev => prev.filter(l => l.id !== id));
+      toast.success('Lead deleted permanently');
     } catch (err) {
-      toast.error('An error occurred');
+      toast.error('An error occurred while deleting lead');
     }
   };
 

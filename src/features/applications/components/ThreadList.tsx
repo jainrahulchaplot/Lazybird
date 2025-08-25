@@ -1,15 +1,17 @@
 import React from 'react';
-import { Mail, Clock, Users, MessageSquare } from 'lucide-react';
+import { Mail, Clock, Users, MessageSquare, Trash2 } from 'lucide-react';
 import { ThreadSummary } from '../../../lib/types/applications';
 import { formatRelativeTime, getInitials } from '../../../lib/ui/format';
 import { LoadingSpinner } from '../../../components/ui/LoadingSpinner';
 import { formatEmailAddress } from '../../../lib/utils/parseAddress';
 import { Paperclip } from 'lucide-react';
+import { Button } from '../../../components/ui/Button';
 
 interface ThreadListProps {
   threads: ThreadSummary[];
   selectedThreadId?: string;
   onThreadSelect: (threadId: string) => void;
+  onDeleteThread?: (threadId: string) => void;
   loading: boolean;
   hasMore: boolean;
   onLoadMore: () => void;
@@ -19,6 +21,7 @@ export const ThreadList: React.FC<ThreadListProps> = ({
   threads,
   selectedThreadId,
   onThreadSelect,
+  onDeleteThread,
   loading,
   hasMore,
   onLoadMore
@@ -48,13 +51,16 @@ export const ThreadList: React.FC<ThreadListProps> = ({
         {threads.map((thread) => (
           <div
             key={thread.id}
-            className={`p-4 border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${
+            className={`p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors ${
               selectedThreadId === thread.id 
                 ? 'bg-blue-50 border-l-4 border-l-blue-500' 
                 : ''
             }`}
-            onClick={() => onThreadSelect(thread.id)}
           >
+            <div 
+              className="cursor-pointer"
+              onClick={() => onThreadSelect(thread.id)}
+            >
             <div className="space-y-2">
               {/* Subject */}
               <div className="flex items-start justify-between">
@@ -120,7 +126,27 @@ export const ThreadList: React.FC<ThreadListProps> = ({
                 )}
               </div>
             </div>
+            
+            {/* Delete button */}
+            {onDeleteThread && (
+              <div className="flex justify-end mt-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={Trash2}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteThread(thread.id);
+                  }}
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                >
+                  Delete
+                </Button>
+              </div>
+            )}
           </div>
+        ))}
+      </div>
         ))}
       </div>
 
