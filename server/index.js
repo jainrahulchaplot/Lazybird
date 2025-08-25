@@ -2473,6 +2473,206 @@ app.put('/api/leads/:id', async (req, res) => {
   }
 });
 
+/* ------------------------------ SNIPPETS API ------------------------------- */
+
+app.get('/api/snippets', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('snippets')
+      .select('*')
+      .order('updated_at', { ascending: false });
+
+    if (error) return res.status(500).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post('/api/snippets', async (req, res) => {
+  try {
+    const snippet = req.body || {};
+    const { data, error } = await supabase
+      .from('snippets')
+      .insert({ ...snippet, user_id: 'me', created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.put('/api/snippets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body || {};
+    
+    const { data, error } = await supabase
+      .from('snippets')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.delete('/api/snippets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const { error } = await supabase
+      .from('snippets')
+      .delete()
+      .eq('id', id);
+
+    if (error) return res.status(500).json({ success: false, error: error.message });
+    res.json({ success: true, message: 'Snippet deleted successfully' });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+/* ------------------------------ ARTIFACTS API ------------------------------- */
+
+app.get('/api/artifacts', async (req, res) => {
+  try {
+    const { leadId } = req.query;
+    let query = supabase
+      .from('artifacts')
+      .select(`
+        *,
+        lead:leads(*),
+        resume:resumes(*)
+      `)
+      .order('created_at', { ascending: false });
+    
+    if (leadId) {
+      query = query.eq('lead_id', leadId);
+    }
+    
+    const { data, error } = await query;
+
+    if (error) return res.status(500).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post('/api/artifacts', async (req, res) => {
+  try {
+    const artifact = req.body || {};
+    const { data, error } = await supabase
+      .from('artifacts')
+      .insert({ ...artifact, user_id: 'me', created_at: new Date().toISOString() })
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.put('/api/artifacts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body || {};
+    
+    const { data, error } = await supabase
+      .from('artifacts')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ success: false, error: e.message });
+    res.json({ success: true, data });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.delete('/api/artifacts/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const { error } = await supabase
+      .from('artifacts')
+      .delete()
+      .eq('id', id);
+
+    if (error) return res.status(500).json({ success: false, error: error.message });
+    res.json({ success: true, message: 'Artifact deleted successfully' });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+/* ------------------------------ APPLICATIONS API ------------------------------- */
+
+app.get('/api/applications', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('applications')
+      .select(`
+        *,
+        lead:leads(*),
+        messages(*, contact:contacts(*))
+      `)
+      .order('updated_at', { ascending: false });
+
+    if (error) return res.status(500).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.post('/api/applications', async (req, res) => {
+  try {
+    const application = req.body || {};
+    const { data, error } = await supabase
+      .from('applications')
+      .insert({ ...application, user_id: 'me', created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
+app.put('/api/applications/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body || {};
+    
+    const { data, error } = await supabase
+      .from('applications')
+      .update({ ...updates, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ success: false, error: error.message });
+    res.json({ success: true, data });
+  } catch (e) {
+    res.status(500).json({ success: false, error: e.message });
+  }
+});
+
 /* ------------------------------ GMAIL APPLICATIONS API ------------------------------ */
 
 // Get Gmail applications for a lead using labels and smart search

@@ -84,7 +84,8 @@ export const db = {
       return { userData, settingsData, userError, settingsError };
     } catch (error) {
       console.error('Error initializing user with OpenAI:', error);
-      return { userData: null, settingsData: null, userError: error.message, settingsError: error.message };
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return { userData: null, settingsData: null, userError: errorMessage, settingsError: errorMessage };
     }
   },
 
@@ -145,12 +146,28 @@ export const db = {
 
   // Snippets
   async getSnippets() {
-    const response = await supabase
-      .from('snippets')
-      .select('*')
-      .eq('user_id', 'me')
-      .order('updated_at', { ascending: false });
-    return handleSupabaseResponse(response);
+    try {
+      const response = await fetch('http://localhost:3001/api/snippets', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      if (result.success && result.data) {
+        return { data: result.data, error: null };
+      } else {
+        return { data: null, error: result.error || 'Failed to fetch snippets' };
+      }
+    } catch (error) {
+      console.error('Failed to fetch snippets:', error);
+      return { data: null, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
   },
 
   async createSnippet(snippet: any) {
@@ -182,12 +199,28 @@ export const db = {
 
   // Leads
   async getLeads() {
-    const response = await supabase
-      .from('leads')
-      .select('*')
-      .eq('user_id', 'me')
-      .order('updated_at', { ascending: false });
-    return handleSupabaseResponse(response);
+    try {
+      const response = await fetch('http://localhost:3001/api/leads', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      if (result.success && result.data) {
+        return { data: result.data, error: null };
+      } else {
+        return { data: null, error: result.error || 'Failed to fetch leads' };
+      }
+    } catch (error) {
+      console.error('Failed to fetch leads:', error);
+      return { data: null, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
   },
 
   async createLead(lead: any) {
@@ -280,15 +313,28 @@ export const db = {
 
   // Applications
   async getApplications() {
-    const response = await supabase
-      .from('applications')
-      .select(`
-        *,
-        lead:leads(*),
-        messages(*, contact:contacts(*))
-      `)
-      .order('updated_at', { ascending: false });
-    return handleSupabaseResponse(response);
+    try {
+      const response = await fetch('http://localhost:3001/api/applications', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      if (result.success && result.data) {
+        return { data: result.data, error: null };
+      } else {
+        return { data: null, error: result.error || 'Failed to fetch applications' };
+      }
+    } catch (error) {
+      console.error('Failed to fetch applications:', error);
+      return { data: null, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
   },
 
   async createApplication(application: any) {
@@ -377,21 +423,33 @@ export const db = {
   },
 
   async getArtifacts(leadId?: string) {
-    let query = supabase
-      .from('artifacts')
-      .select(`
-        *,
-        lead:leads(*),
-        resume:resumes(*)
-      `)
-      .order('created_at', { ascending: false });
-    
-    if (leadId) {
-      query = query.eq('lead_id', leadId);
+    try {
+      const url = leadId 
+        ? `http://localhost:3001/api/artifacts?leadId=${leadId}`
+        : 'http://localhost:3001/api/artifacts';
+        
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      if (result.success && result.data) {
+        return { data: result.data, error: null };
+      } else {
+        return { data: null, error: result.error || 'Failed to fetch artifacts' };
+      }
+    } catch (error) {
+      console.error('Failed to fetch artifacts:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      return { data: null, error: errorMessage };
     }
-    
-    const response = await query;
-    return handleSupabaseResponse(response);
   },
 
   // Prompt Presets
