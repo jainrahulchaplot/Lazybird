@@ -53,3 +53,24 @@ Desktop.ini
 coverage/
 reports/
 *.tgz
+
+# Sensitive OAuth and test files
+fix_gmail_oauth.html
+simple_gmail_test.html
+get_fresh_token.html
+get_gmail_token.html
+test_gmail_flow.html
+test_oauth2.html
+test_gmail_direct.js
+test_gmail_working.js
+exchange_token.js
+debug_oauth.js
+check_env.js
+test_gmail_creds.js
+create_new_oauth_app.html
+test_supabase.html
+setup_storage.js
+setup_vector_db.js
+run_migration.js
+lusha-mcp-server.js
+lusha-mcp-server-simple.js
