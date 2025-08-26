@@ -6,11 +6,23 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      // Only proxy in development
+      // Proxy all /api calls to backend in development
       '/api': {
-        target: process.env.VITE_API_BASE_URL || 'http://localhost:3001',
+        target: 'http://localhost:3001',
         changeOrigin: true,
         secure: false,
+        rewrite: (path) => path.replace(/^\/api/, '/api'),
+        configure: (proxy, options) => {
+          proxy.on('error', (err, req, res) => {
+            console.log('proxy error', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, res) => {
+            console.log('Sending Request to the Target:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req, res) => {
+            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+          });
+        },
       }
     }
   },

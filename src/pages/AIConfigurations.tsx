@@ -135,7 +135,7 @@ export const AIConfigurations: React.FC = () => {
 
   const loadConfig = async () => {
     try {
-      const response = await fetch(apiUrls.ai('/config'));
+      const response = await fetch(apiUrls.aiConfig());
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -159,7 +159,7 @@ export const AIConfigurations: React.FC = () => {
   const saveConfig = async () => {
     setIsSaving(true);
     try {
-      const response = await fetch(apiUrls.ai('/config'), {
+      const response = await fetch(apiUrls.aiConfig(), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config)
@@ -195,7 +195,7 @@ export const AIConfigurations: React.FC = () => {
   const runTest = async () => {
     setIsTesting(true);
     try {
-      const response = await fetch(apiUrls.ai('/config/test'), {
+      const response = await fetch(apiUrls.aiConfig('/test'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -25,7 +25,7 @@ export const config = {
     (window.location.hostname === 'localhost' || 
      window.location.hostname === '127.0.0.1'),
   
-  // API endpoints
+  // API endpoints - corrected to match backend routes
   endpoints: {
     gmail: '/api/gmail',
     openai: '/api/openai',
@@ -35,6 +35,7 @@ export const config = {
     resumes: '/api/resumes',
     applications: '/api/applications',
     ai: '/api/ai',
+    aiConfig: '/api/ai-config', // Corrected: backend uses ai-config with hyphen
     upload: '/api/upload-resume',
     artifacts: '/api/artifacts',
     snippets: '/api/snippets',
@@ -64,6 +65,7 @@ export const apiUrls = {
   resumes: (path: string = '') => buildApiUrl(config.endpoints.resumes, path),
   applications: (path: string = '') => buildApiUrl(config.endpoints.applications, path),
   ai: (path: string = '') => buildApiUrl(config.endpoints.ai, path),
+  aiConfig: (path: string = '') => buildApiUrl(config.endpoints.aiConfig, path), // Corrected endpoint
   upload: (path: string = '') => buildApiUrl(config.endpoints.upload, path),
   artifacts: (path: string = '') => buildApiUrl(config.endpoints.artifacts, path),
   snippets: (path: string = '') => buildApiUrl(config.endpoints.snippets, path),
