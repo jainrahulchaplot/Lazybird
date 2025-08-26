@@ -215,6 +215,14 @@ export const ThreadView: React.FC<ThreadViewProps> = ({
 
   return (
     <div className="h-full flex flex-col">
+      {/* Debug info */}
+      <div className="p-2 bg-blue-100 text-xs text-gray-700 border-b">
+        ThreadView Debug: threadId={threadId}, messages={messages?.length || 0}, recipients={recipients?.length || 0}
+      </div>
+      {/* Super visible debug element */}
+      <div className="p-4 bg-red-500 text-white text-center font-bold text-lg">
+        🚨 THREADVIEW IS RENDERING! 🚨
+      </div>
       {/* Thread header */}
       <div className="p-6 border-b border-gray-200 bg-white">
         <div className="flex items-start justify-between">
