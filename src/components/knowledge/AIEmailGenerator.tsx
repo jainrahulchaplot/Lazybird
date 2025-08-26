@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Bot, Sparkles, Send, Copy, Check, FileText, Brain } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { apiUrls } from '../../lib/config';
 
 interface AIEmailGeneratorProps {
   leadData?: {
@@ -43,7 +44,7 @@ const AIEmailGenerator: React.FC<AIEmailGeneratorProps> = ({ leadData, onEmailGe
 
       console.log('🤖 Generating AI email with payload:', payload);
 
-      const response = await fetch('http://localhost:3001/api/ai/generate-email', {
+      const response = await fetch(apiUrls.ai('/generate-email'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Brain, Database, FileText, Search, Trash2, Calendar, Tag, Eye } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import DocumentUpload from '../components/knowledge/DocumentUpload';
+import { apiUrls } from '../lib/config';
 
 interface Document {
   id: string;
@@ -41,7 +42,7 @@ const KnowledgeBasePage: React.FC = () => {
   const loadDocuments = async () => {
     try {
       setLoading(true);
-      const response = await fetch('http://localhost:3001/api/documents');
+      const response = await fetch(apiUrls.documents());
       const result = await response.json();
       
       if (result.success) {
@@ -61,7 +62,7 @@ const KnowledgeBasePage: React.FC = () => {
     if (documentChunks[documentId]) return; // Already loaded
     
     try {
-      const response = await fetch('http://localhost:3001/api/documents/search', {
+      const response = await fetch(apiUrls.documents('/search'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -104,7 +105,7 @@ const KnowledgeBasePage: React.FC = () => {
     }
 
     try {
-      const response = await fetch(`http://localhost:3001/api/documents/${id}`, {
+      const response = await fetch(apiUrls.documents(`/${id}`), {
         method: 'DELETE'
       });
       
@@ -130,7 +131,7 @@ const KnowledgeBasePage: React.FC = () => {
 
     setSearching(true);
     try {
-      const response = await fetch('http://localhost:3001/api/documents/search', {
+      const response = await fetch(apiUrls.documents('/search'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

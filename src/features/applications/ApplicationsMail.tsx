@@ -12,6 +12,7 @@ import { leadsApi } from '../../lib/api/leads';
 import { gmailApi } from '../../lib/api/gmail';
 import { aiApi } from '../../lib/api/ai';
 import { mailCache } from '../../lib/cache/mailCache';
+import { apiUrls } from '../../lib/config';
 
 // No more mock data - using real APIs
 
@@ -143,7 +144,7 @@ export const ApplicationsMail: React.FC = () => {
 
     try {
       // Call backend to hide thread
-      const response = await fetch('http://localhost:3001/api/gmail/thread/hide', {
+      const response = await fetch(apiUrls.gmail('/thread/hide'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ threadId })

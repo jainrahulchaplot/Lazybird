@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Upload, FileText, User, Building, FileSearch, StickyNote } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { apiUrls } from '../../lib/config';
 
 interface DocumentUploadProps {
   onUploadSuccess?: (document: any) => void;
@@ -118,7 +119,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadSuccess }) => {
           const arrayBuffer = await formData.file.arrayBuffer();
           const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
           
-          const fileResponse = await fetch('http://localhost:3001/api/upload-resume', {
+          const fileResponse = await fetch(apiUrls.upload(), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -143,7 +144,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({ onUploadSuccess }) => {
       }
 
       // Process document in vector database
-      const response = await fetch('http://localhost:3001/api/documents/upload', {
+      const response = await fetch(apiUrls.documents('/upload'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

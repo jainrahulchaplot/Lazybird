@@ -1,6 +1,7 @@
 import { Lead } from '../types/applications';
+import { apiUrls } from '../config';
 
-const API_BASE = 'http://localhost:3001/api';
+const API_BASE = apiUrls.leads();
 
 export const leadsApi = {
   // Get all leads

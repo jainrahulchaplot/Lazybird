@@ -21,6 +21,7 @@ import { Input } from '../components/ui/Input';
 import { Badge } from '../components/ui/Badge';
 import { LoadingSpinner } from '../components/ui/LoadingSpinner';
 import toast from 'react-hot-toast';
+import { apiUrls } from '../lib/config';
 
 // Types for AI Configuration
 interface AIDefaults {
@@ -134,7 +135,7 @@ export const AIConfigurations: React.FC = () => {
 
   const loadConfig = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/ai-config');
+      const response = await fetch(apiUrls.ai('/config'));
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -158,7 +159,7 @@ export const AIConfigurations: React.FC = () => {
   const saveConfig = async () => {
     setIsSaving(true);
     try {
-      const response = await fetch('http://localhost:3001/api/ai-config', {
+      const response = await fetch(apiUrls.ai('/config'), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config)
@@ -194,7 +195,7 @@ export const AIConfigurations: React.FC = () => {
   const runTest = async () => {
     setIsTesting(true);
     try {
-      const response = await fetch('http://localhost:3001/api/ai-config/test', {
+      const response = await fetch(apiUrls.ai('/config/test'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

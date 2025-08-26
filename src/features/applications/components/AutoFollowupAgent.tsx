@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Send, Plus, AlertCircle } from 'lucide-react';
 import { Button } from '../../../components/ui/Button';
+import { apiUrls } from '../../../lib/config';
 
 interface FollowupSchedule {
   id: string;
@@ -31,7 +32,7 @@ export const AutoFollowupAgent: React.FC<AutoFollowupAgentProps> = ({ threadId, 
 
   const fetchSchedules = async () => {
     try {
-      const response = await fetch(`http://localhost:3001/api/ai/auto-followup/${threadId}`);
+      const response = await fetch(apiUrls.ai(`/auto-followup/${threadId}`));
       const data = await response.json();
       if (data.success) {
         setSchedules(data.schedules);
@@ -44,7 +45,7 @@ export const AutoFollowupAgent: React.FC<AutoFollowupAgentProps> = ({ threadId, 
   const scheduleFollowup = async () => {
     setIsScheduling(true);
     try {
-      const response = await fetch('http://localhost:3001/api/ai/auto-followup', {
+      const response = await fetch(apiUrls.ai('/auto-followup'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -71,7 +72,7 @@ export const AutoFollowupAgent: React.FC<AutoFollowupAgentProps> = ({ threadId, 
   const triggerFollowup = async () => {
     setIsTriggering(true);
     try {
-      const response = await fetch('http://localhost:3001/api/ai/auto-followup', {
+      const response = await fetch(apiUrls.ai('/auto-followup'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ threadId, leadId, action: 'trigger' })

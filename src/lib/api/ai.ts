@@ -1,6 +1,7 @@
 import { DraftReplyRequest, DraftReplyResponse } from '../types/applications';
+import { apiUrls } from '../config';
 
-const API_BASE = 'http://localhost:3001/api';
+const API_BASE = apiUrls.ai();
 
 export const aiApi = {
   // Generate AI-drafted reply based on thread context

@@ -39,6 +39,7 @@ import toast from "react-hot-toast";
 import { format } from "date-fns";
 import { useGlobalStore } from "../stores/globalStore";
 import { LushaEnrichmentModal } from "../components/ui/LushaEnrichmentModal";
+import { apiUrls } from '../lib/config';
 
 type Tab = "overview" | "my-fit" | "contacts" | "my-applications";
 
@@ -255,7 +256,7 @@ export const LeadDetailPage: React.FC<LeadDetailPageProps> = ({ leadId, onBack }
     
     setIsLoadingApplications(true);
     try {
-      const response = await fetch('http://localhost:3001/api/gmail/applications', {
+      const response = await fetch(apiUrls.gmail('/applications'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ leadId: lead.id })
@@ -276,7 +277,7 @@ export const LeadDetailPage: React.FC<LeadDetailPageProps> = ({ leadId, onBack }
   const loadThread = async (threadId: string) => {
     setIsLoadingThread(true);
     try {
-      const response = await fetch('http://localhost:3001/api/gmail/thread', {
+      const response = await fetch(apiUrls.gmail('/thread'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ threadId })
@@ -299,7 +300,7 @@ export const LeadDetailPage: React.FC<LeadDetailPageProps> = ({ leadId, onBack }
     
     setIsGeneratingFollowUp(true);
     try {
-      const response = await fetch('http://localhost:3001/api/openai/generate-email-draft', {
+      const response = await fetch(apiUrls.openai('/generate-email-draft'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -339,7 +340,7 @@ export const LeadDetailPage: React.FC<LeadDetailPageProps> = ({ leadId, onBack }
     if (!selectedThread || !followUpEmail.subject || !followUpEmail.body) return;
     
     try {
-      const response = await fetch('http://localhost:3001/api/gmail/send', {
+      const response = await fetch(apiUrls.gmail('/send'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -363,7 +364,7 @@ export const LeadDetailPage: React.FC<LeadDetailPageProps> = ({ leadId, onBack }
   // ---- helper calls (keep your existing API routes) ----
 
   const fetchCompanyInfo = async (companyName: string) => {
-    const res = await fetch("/api/openai/company-research", {
+    const res = await fetch(apiUrls.openai('/company-research'), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ companyName, leadId })
@@ -374,7 +375,7 @@ export const LeadDetailPage: React.FC<LeadDetailPageProps> = ({ leadId, onBack }
   };
 
   const computeFitScore = async (leadId_: string, resumeId?: string) => {
-    const res = await fetch("/api/openai/fit-analysis", {
+    const res = await fetch(apiUrls.openai('/fit-analysis'), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -390,7 +391,7 @@ export const LeadDetailPage: React.FC<LeadDetailPageProps> = ({ leadId, onBack }
   };
 
   const listApplications = async (leadId_: string) => {
-    const res = await fetch("/api/gmail/applications", {
+    const res = await fetch(apiUrls.gmail('/applications'), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ leadId: leadId_, companyName: lead?.company, roleName: lead?.role })
@@ -401,7 +402,7 @@ export const LeadDetailPage: React.FC<LeadDetailPageProps> = ({ leadId, onBack }
   };
 
   const getThread = async (threadId: string) => {
-    const res = await fetch("/api/gmail/thread", {
+    const res = await fetch(apiUrls.gmail('/thread'), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ threadId, leadId })
@@ -419,7 +420,7 @@ export const LeadDetailPage: React.FC<LeadDetailPageProps> = ({ leadId, onBack }
     resumeId?: string;
     enhancedContext?: any;
   }) => {
-      const res = await fetch("http://localhost:3001/api/openai/generate-email-draft", {
+      const res = await fetch(apiUrls.openai('/generate-email-draft'), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -725,7 +726,7 @@ export const LeadDetailPage: React.FC<LeadDetailPageProps> = ({ leadId, onBack }
     setEnrichingContactId(contact.id);
     try {
       // Call Lusha API to find contact details
-      const response = await fetch("http://localhost:3001/api/lusha/enrich-contact", {
+      const response = await fetch(apiUrls.lusha('/enrich-contact'), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1238,7 +1239,7 @@ export const LeadDetailPage: React.FC<LeadDetailPageProps> = ({ leadId, onBack }
                           console.log('🔍 Starting knowledge base search...');
                           
                           // Search for user profile and personal documents specifically
-                          const profileResponse = await fetch('http://localhost:3001/api/documents/search', {
+                          const profileResponse = await fetch(apiUrls.documents('/search'), {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -1255,7 +1256,7 @@ export const LeadDetailPage: React.FC<LeadDetailPageProps> = ({ leadId, onBack }
                           }
                           
                           // Get all available chunks for comprehensive context
-                          const allDocsResponse = await fetch('http://localhost:3001/api/documents/search', {
+                          const allDocsResponse = await fetch(apiUrls.documents('/search'), {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -1274,7 +1275,7 @@ export const LeadDetailPage: React.FC<LeadDetailPageProps> = ({ leadId, onBack }
                           }
                           
                           // Search for role-specific content
-                          const roleResponse = await fetch('http://localhost:3001/api/documents/search', {
+                          const roleResponse = await fetch(apiUrls.documents('/search'), {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({

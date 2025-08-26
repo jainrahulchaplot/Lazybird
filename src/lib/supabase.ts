@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { apiUrls } from './config';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -54,7 +55,7 @@ export const db = {
         .single();
 
       // Then configure OpenAI settings using backend API
-      const settingsResponse = await fetch('http://localhost:3001/api/settings/update', {
+      const settingsResponse = await fetch(apiUrls.settings('/update'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -102,7 +103,7 @@ export const db = {
   // Resumes
   async getResumes() {
     try {
-      const response = await fetch('http://localhost:3001/api/resumes');
+      const response = await fetch(apiUrls.resumes());
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -147,12 +148,7 @@ export const db = {
   // Snippets
   async getSnippets() {
     try {
-      const response = await fetch('http://localhost:3001/api/snippets', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      const response = await fetch(apiUrls.snippets());
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -200,12 +196,7 @@ export const db = {
   // Leads
   async getLeads() {
     try {
-      const response = await fetch('http://localhost:3001/api/leads', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      const response = await fetch(apiUrls.leads());
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -244,7 +235,7 @@ export const db = {
 
   async getLead(id: string) {
     try {
-      const response = await fetch(`http://localhost:3001/api/leads/${id}`);
+      const response = await fetch(apiUrls.leads(`/${id}`));
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
@@ -263,7 +254,7 @@ export const db = {
   // Delete functions
   async deleteLead(id: string) {
     try {
-      const response = await fetch(`http://localhost:3001/api/leads/${id}`, {
+      const response = await fetch(apiUrls.leads(`/${id}`), {
         method: 'DELETE',
       });
       
@@ -314,12 +305,7 @@ export const db = {
   // Applications
   async getApplications() {
     try {
-      const response = await fetch('http://localhost:3001/api/applications', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      const response = await fetch(apiUrls.applications());
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -359,7 +345,7 @@ export const db = {
   // Delete functions
   async deleteApplication(id: string) {
     try {
-      const response = await fetch(`http://localhost:3001/api/applications/${id}`, {
+      const response = await fetch(apiUrls.applications(`/${id}`), {
         method: 'DELETE',
       });
       
@@ -392,7 +378,7 @@ export const db = {
   // Delete functions
   async deleteMessageThread(applicationId: string) {
     try {
-      const response = await fetch(`http://localhost:3001/api/messages/${applicationId}`, {
+      const response = await fetch(apiUrls.messages(`/${applicationId}`), {
         method: 'DELETE',
       });
       
@@ -424,11 +410,11 @@ export const db = {
 
   async getArtifacts(leadId?: string) {
     try {
-      const url = leadId 
-        ? `http://localhost:3001/api/artifacts?leadId=${leadId}`
-        : 'http://localhost:3001/api/artifacts';
+      const artifactsUrl = leadId 
+        ? apiUrls.artifacts(`?leadId=${leadId}`)
+        : apiUrls.artifacts();
         
-      const response = await fetch(url, {
+      const response = await fetch(artifactsUrl, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -491,12 +477,7 @@ export const db = {
   async getSettings() {
     try {
       console.log('🔄 Fetching settings from backend...');
-      const response = await fetch('http://localhost:3001/api/settings', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      const response = await fetch(apiUrls.settings());
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -520,7 +501,7 @@ export const db = {
 
   async updateSettings(updates: any) {
     try {
-      const response = await fetch('http://localhost:3001/api/settings', {
+      const response = await fetch(apiUrls.settings(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -3363,7 +3363,7 @@ The cover letter should feel like it was written specifically for this candidate
 // OAuth2 Authorization Flow
 app.get('/api/gmail/auth', (req, res) => {
   const clientId = process.env.GMAIL_CLIENT_ID;
-  const redirectUri = 'http://localhost:3001/api/gmail/callback';
+  const redirectUri = process.env.BASE_URL ? `${process.env.BASE_URL}/api/gmail/callback` : 'http://localhost:3001/api/gmail/callback';
       const scope = 'https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.readonly';
   
   if (!clientId) {
@@ -3417,7 +3417,7 @@ app.get('/api/gmail/callback', async (req, res) => {
     
     const clientId = process.env.GMAIL_CLIENT_ID;
     const clientSecret = process.env.GMAIL_CLIENT_SECRET;
-    const redirectUri = 'http://localhost:3001/api/gmail/callback';
+    const redirectUri = process.env.BASE_URL ? `${process.env.BASE_URL}/api/gmail/callback` : 'http://localhost:3001/api/gmail/callback';
     
     const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
     

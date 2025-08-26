@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import e from 'cors';
+import { apiUrls } from '../lib/config';
 
 interface SettingsFormData {
   openai_api_key: string;
@@ -170,7 +171,7 @@ export const SettingsPage: React.FC = () => {
     
     try {
       // Test OpenAI API key using backend endpoint (uses .env key)
-      const response = await fetch('http://localhost:3001/api/openai/test', {
+      const response = await fetch(apiUrls.openai('/test'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

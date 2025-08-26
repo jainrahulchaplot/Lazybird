@@ -1,9 +1,11 @@
+import { apiUrls } from './config';
+
 // Gmail API utility for browser environment
 export const gmailUtils = {
   // Test Gmail connection using backend proxy
   async testConnection() {
     try {
-      const response = await fetch('http://localhost:3001/api/gmail/test-connection', {
+      const response = await fetch(apiUrls.gmail('/test-connection'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({})
@@ -23,7 +25,7 @@ export const gmailUtils = {
   // Send email using backend proxy
   async sendEmail(leadId: string, contactEmail: string, coverLetter: string, resumePath?: string) {
     try {
-      const response = await fetch('http://localhost:3001/api/gmail/send-application', {
+      const response = await fetch(apiUrls.gmail('/send-application'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

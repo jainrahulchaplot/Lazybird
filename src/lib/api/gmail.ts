@@ -1,6 +1,7 @@
 import { Thread, ThreadSummary, SendEmailRequest } from '../types/applications';
+import { apiUrls } from '../config';
 
-const API_BASE = 'http://localhost:3001/api';
+const API_BASE = apiUrls.gmail();
 
 export const gmailApi = {
   // Get sent threads, optionally filtered by lead IDs
@@ -9,7 +10,7 @@ export const gmailApi = {
       ? `?leadIds=${leadIds.join(',')}` 
       : '';
     
-    const response = await fetch(`${API_BASE}/gmail/sent${params}`);
+    const response = await fetch(`${API_BASE}/sent${params}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch sent threads: ${response.statusText}`);
     }
@@ -29,7 +30,7 @@ export const gmailApi = {
       params.append('leadIds', leadIds.join(','));
     }
     
-    const response = await fetch(`${API_BASE}/gmail/sent/delta?${params}`);
+    const response = await fetch(`${API_BASE}/sent/delta?${params}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch delta: ${response.statusText}`);
     }
@@ -51,7 +52,7 @@ export const gmailApi = {
       ? `?leadIds=${leadIds.join(',')}` 
       : '';
     
-    const response = await fetch(`${API_BASE}/gmail/threads/complete${params}`);
+    const response = await fetch(`${API_BASE}/threads/complete${params}`);
     if (!response.ok) {
       throw new Error(`Failed to fetch complete threads: ${response.statusText}`);
     }
@@ -65,7 +66,7 @@ export const gmailApi = {
 
   // Get full thread details with attachments
   async getThread(threadId: string): Promise<Thread> {
-    const response = await fetch(`${API_BASE}/gmail/thread/full`, {
+    const response = await fetch(`${API_BASE}/thread/full`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ threadId })
@@ -92,7 +93,7 @@ export const gmailApi = {
       cc: request.cc?.map(addr => addr.email) || []
     };
     
-    const response = await fetch(`${API_BASE}/gmail/send`, {
+    const response = await fetch(`${API_BASE}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(apiRequest)

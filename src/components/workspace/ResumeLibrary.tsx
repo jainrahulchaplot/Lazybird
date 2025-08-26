@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-// import { db } from '../../lib/supabase'; // No longer needed - using backend API
+import { apiUrls } from '../../lib/config';
 import { Card, CardHeader, CardBody } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -27,7 +27,7 @@ export const ResumeLibrary: React.FC = () => {
   const loadResumes = async () => {
     try {
       console.log('📚 Loading resumes via backend API...');
-      const response = await fetch('http://localhost:3001/api/resumes');
+      const response = await fetch(apiUrls.resumes());
       const result = await response.json();
       
       if (!result.success) {
@@ -86,7 +86,7 @@ export const ResumeLibrary: React.FC = () => {
       
       // Call backend API to handle upload
       console.log('📁 Sending request to backend...');
-      const response = await fetch('http://localhost:3001/api/upload-resume', {
+      const response = await fetch(apiUrls.upload(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -137,7 +137,7 @@ export const ResumeLibrary: React.FC = () => {
     if (!confirm('Are you sure you want to delete this resume?')) return;
 
     try {
-      const response = await fetch(`http://localhost:3001/api/resumes/${id}`, {
+      const response = await fetch(apiUrls.resumes(`/${id}`), {
         method: 'DELETE'
       });
       
