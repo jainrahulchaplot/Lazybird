@@ -37,6 +37,9 @@ export const ApplicationsMail: React.FC = () => {
         hasMessages: !!selectedThread.messages,
         hasRecipients: !!selectedThread.recipients
       });
+      console.log('🔍 Full thread object:', JSON.stringify(selectedThread, null, 2));
+    } else {
+      console.log('🔍 selectedThread is null/undefined');
     }
   }, [selectedThread]);
   const [loading, setLoading] = useState(false);
@@ -577,6 +580,9 @@ export const ApplicationsMail: React.FC = () => {
             <>
               {/* Thread view */}
               <div className="flex-1 overflow-hidden">
+                <div className="p-2 bg-green-100 text-xs text-gray-700 border-b">
+                  Rendering ThreadView with: ID={selectedThread.id}, Messages={selectedThread.messages?.length || 0}, Recipients={selectedThread.recipients?.length || 0}
+                </div>
                 <ThreadView
                   threadId={selectedThread.id}
                   subject={selectedThread.subject}
