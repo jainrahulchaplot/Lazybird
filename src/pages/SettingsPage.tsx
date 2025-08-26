@@ -38,6 +38,7 @@ interface SettingsFormData {
 
 export const SettingsPage: React.FC = () => {
   const { settings, setSettings, user } = useGlobalStore();
+  
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState({ openai: false, gmail: false });
@@ -55,28 +56,6 @@ export const SettingsPage: React.FC = () => {
     // AI Prompt Configuration with defaults
     // Prompts are now managed in AI Configurations page
   });
-
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
-  useEffect(() => {
-    if (settings) {
-      setFormData({
-        openai_api_key: settings.openai_api_key || '',
-        gmail_client_id: settings.gmail_client_id || '',
-        gmail_client_secret: settings.gmail_client_secret || '',
-        gmail_refresh_token: settings.gmail_refresh_token || '',
-        gmail_access_token: settings.gmail_access_token || '',
-        gmail_user_email: settings.gmail_user_email || '',
-        tone_default: settings.tone_default || 'honest',
-        length_default: settings.length_default || 'medium',
-        gmail_connected: settings.gmail_connected || false,
-        // AI Prompt Configuration
-        // Prompts are now managed in AI Configurations page
-      });
-    }
-  }, [settings]);
 
   const loadSettings = async () => {
     try {
@@ -100,6 +79,38 @@ export const SettingsPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  useEffect(() => {
+    if (settings) {
+      setFormData({
+        openai_api_key: settings.openai_api_key || '',
+        gmail_client_id: settings.gmail_client_id || '',
+        gmail_client_secret: settings.gmail_client_secret || '',
+        gmail_refresh_token: settings.gmail_refresh_token || '',
+        gmail_access_token: settings.gmail_access_token || '',
+        gmail_user_email: settings.gmail_user_email || '',
+        tone_default: settings.tone_default || 'honest',
+        length_default: settings.length_default || 'medium',
+        gmail_connected: settings.gmail_connected || false,
+        // AI Prompt Configuration
+        // Prompts are now managed in AI Configurations page
+      });
+    }
+  }, [settings]);
+
+  // Show loading if settings are not loaded yet
+  if (loading || !settings) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <LoadingSpinner />
+        <span className="ml-2 text-gray-600">Loading settings...</span>
+      </div>
+    );
+  }
 
   const handleSave = async (section: 'openai' | 'gmail' | 'defaults' | 'prompts') => {
     setSaving(true);

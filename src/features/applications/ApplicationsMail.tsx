@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { RefreshCw, Filter } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { Button } from '../../components/ui/Button';
 import { LeadMultiSelect } from './components/LeadMultiSelect';
 import { ThreadList } from './components/ThreadList';
@@ -40,6 +41,20 @@ export const ApplicationsMail: React.FC = () => {
     }
 
     try {
+      // Call backend to hide thread
+      const response = await fetch('http://localhost:3001/api/gmail/thread/hide', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threadId })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to hide thread on backend');
+      }
+
+      // Also mark as untracked in local cache
+      await mailCache.markThreadAsUntracked(threadId);
+      
       // Remove from local state immediately for better UX
       setThreads(prev => prev.filter(thread => thread.id !== threadId));
       
@@ -48,16 +63,9 @@ export const ApplicationsMail: React.FC = () => {
         setSelectedThread(null);
       }
       
-      // Update cache
-      await mailCache.setSummaries(threads.filter(thread => thread.id !== threadId));
-      
-      // Note: We're not actually deleting from Gmail here, just removing from our local cache
-      // If you want to delete from Gmail as well, you'd need to call the Gmail API
-      console.log(`Thread ${threadId} removed from local cache`);
+      console.log(`Thread ${threadId} hidden on backend and marked as untracked`);
     } catch (error) {
       console.error('Failed to delete thread:', error);
-      // Revert the state change if there was an error
-      // You might want to show a toast notification here
     }
   };
 
@@ -65,8 +73,8 @@ export const ApplicationsMail: React.FC = () => {
   useEffect(() => {
     const initializeCache = async () => {
       try {
-        // Load cached summaries immediately for instant UI
-        const cachedSummaries = await mailCache.getSummaries();
+        // Load cached summaries immediately for instant UI (only tracked ones)
+        const cachedSummaries = await mailCache.getTrackedSummaries();
         if (cachedSummaries.length > 0) {
           setThreads(cachedSummaries);
           setCacheInitialized(true);
@@ -85,25 +93,25 @@ export const ApplicationsMail: React.FC = () => {
         // If no cache, fetch initial threads
         if (cachedSummaries.length === 0) {
           const fetchedThreads = await gmailApi.getSentThreads([]);
-          setThreads(fetchedThreads);
           
-          // Cache the summaries
-          await mailCache.setSummaries(fetchedThreads);
-          await mailCache.updateMeta({ lastRefreshISO: new Date().toISOString() });
-          setLastRefreshTime(new Date().toISOString());
+          // Mark all new threads as tracked by default
+          const trackedThreads = fetchedThreads.map(thread => ({
+            ...thread,
+            tracked: true
+          }));
+          
+          setThreads(trackedThreads);
+          await mailCache.setSummaries(trackedThreads);
+          setCacheInitialized(true);
         }
         
-        setCacheInitialized(true);
+        // Auto-refresh on page load
+        if (cachedSummaries.length > 0) {
+          await handleRefresh();
+        }
       } catch (error) {
         console.error('Failed to initialize cache:', error);
-        // Fallback to direct API call
-        try {
-          const fetchedThreads = await gmailApi.getSentThreads([]);
-          setThreads(fetchedThreads);
-        } catch (fallbackError) {
-          console.error('Fallback also failed:', fallbackError);
-          setThreads([]);
-        }
+        toast.error('Failed to load data');
       }
     };
     
@@ -234,12 +242,26 @@ export const ApplicationsMail: React.FC = () => {
       console.log('🔄 Starting complete refresh to get all threads including incoming replies...');
       
       // Always fetch complete threads for full refresh (not just delta)
-      const completeThreads = await gmailApi.getCompleteThreads(selectedLeadIds);
+      const completeThreads = await gmailApi.getSentThreads(selectedLeadIds);
       console.log('✅ Complete threads fetched:', completeThreads.length);
       
-      // Update state and cache with complete data
-      setThreads(completeThreads);
-      await mailCache.setSummaries(completeThreads);
+      // Get existing cache to preserve tracking status
+      const existingCache = await mailCache.getSummaries();
+      const existingTrackingMap = new Map();
+      existingCache.forEach(thread => {
+        existingTrackingMap.set(thread.id, thread.tracked);
+      });
+      
+      // Merge new threads with existing tracking status
+      const mergedThreads = completeThreads.map(thread => ({
+        ...thread,
+        tracked: existingTrackingMap.has(thread.id) ? existingTrackingMap.get(thread.id) : true
+      }));
+      
+      // Update state and cache with merged data (only tracked ones)
+      const trackedThreads = mergedThreads.filter(thread => thread.tracked !== false);
+      setThreads(trackedThreads);
+      await mailCache.setSummaries(mergedThreads);
       await mailCache.updateMeta({ lastRefreshISO: new Date().toISOString() });
       setLastRefreshTime(new Date().toISOString());
       
@@ -360,24 +382,11 @@ export const ApplicationsMail: React.FC = () => {
 
       {/* Right Panel - Thread View + Composer */}
       <div className="flex-1 bg-white flex flex-col">
-        {console.log('Rendering right panel, selectedThread:', {
-          id: selectedThread?.id,
-          subject: selectedThread?.subject,
-          messagesCount: selectedThread?.messages?.length || 0,
-          messages: selectedThread?.messages,
-          recipients: selectedThread?.recipients
-        })}
+        {/* Debug info removed for production */}
         {selectedThread ? (
           <>
             {/* Thread view */}
             <div className="flex-1 overflow-hidden">
-              {console.log('🔍 Passing to ThreadView:', {
-                threadId: selectedThread.id,
-                subject: selectedThread.subject,
-                messagesCount: selectedThread.messages?.length || 0,
-                messages: selectedThread.messages,
-                recipients: selectedThread.recipients
-              })}
               <ThreadView
                 threadId={selectedThread.id}
                 subject={selectedThread.subject}
@@ -391,13 +400,13 @@ export const ApplicationsMail: React.FC = () => {
             {/* Auto Follow-up Agent */}
             <AutoFollowupAgent
               threadId={selectedThread.id}
-              leadId={selectedThread.leadId}
+              leadId={selectedThread.leadIds?.[0] || ''}
             />
 
             {/* Composer */}
             <Composer
               threadId={selectedThread.id}
-              recipients={selectedThread.recipients}
+              recipients={selectedThread.recipients.map(r => r.email)}
               subject={selectedThread.subject}
               onSend={handleSendEmail}
               onGenerateAI={handleGenerateAI}

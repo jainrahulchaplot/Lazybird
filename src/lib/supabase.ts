@@ -514,7 +514,7 @@ export const db = {
       }
     } catch (error) {
       console.error('🔄 Error in getSettings:', error);
-      return { data: null, error: error.message };
+      return { data: null, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   },
 
@@ -539,7 +539,7 @@ export const db = {
         return { data: null, error: 'Invalid response format' };
       }
     } catch (error) {
-      return { data: null, error: error.message };
+      return { data: null, error: error instanceof Error ? error.message : 'Unknown error' };
     }
   },
 

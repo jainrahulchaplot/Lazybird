@@ -149,6 +149,9 @@ export interface Settings {
   length_default: string;
   followup_rules_id?: string;
   gmail_connected: boolean;
+  // Configuration status flags
+  openai_configured?: boolean;
+  gmail_configured?: boolean;
   // AI Prompt Configuration
   email_generation_system_prompt?: string;
   email_generation_user_prompt_template?: string;

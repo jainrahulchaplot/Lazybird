@@ -144,9 +144,8 @@ export const ThreadList: React.FC<ThreadListProps> = ({
                 </Button>
               </div>
             )}
+            </div>
           </div>
-        ))
-      </div>
         ))}
       </div>
 

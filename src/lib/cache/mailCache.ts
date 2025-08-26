@@ -186,7 +186,12 @@ class MailCacheManager {
   async setSummaries(summaries: ThreadSummary[]) {
     // Update summaries and thread index
     summaries.forEach(summary => {
-      this.cache.summaries.set(summary.id, summary);
+      // Set tracked to true by default if not specified
+      const summaryWithTracking = {
+        ...summary,
+        tracked: summary.tracked !== false // Default to true unless explicitly set to false
+      };
+      this.cache.summaries.set(summary.id, summaryWithTracking);
       this.cache.threadIndex.set(summary.id, {
         id: summary.id,
         updatedAtISO: summary.updatedAt
@@ -230,6 +235,20 @@ class MailCacheManager {
     this.cache.threadIndex.clear();
     this.cache.meta = { version: '1.0' };
     await this.persistCache();
+  }
+
+  async markThreadAsUntracked(threadId: string) {
+    const summary = this.cache.summaries.get(threadId);
+    if (summary) {
+      summary.tracked = false;
+      this.cache.summaries.set(threadId, summary);
+      await this.persistCache();
+    }
+  }
+
+  async getTrackedSummaries(): Promise<ThreadSummary[]> {
+    await this.init;
+    return Array.from(this.cache.summaries.values()).filter(summary => summary.tracked !== false);
   }
 
   // Utility methods

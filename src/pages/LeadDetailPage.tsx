@@ -83,6 +83,36 @@ interface ResumeData {
 
 export const LeadDetailPage: React.FC<LeadDetailPageProps> = ({ leadId, onBack }) => {
   const { settings, user } = useGlobalStore();
+  
+
+
+  // Load settings if not available
+  useEffect(() => {
+    if (!settings) {
+      const loadSettings = async () => {
+        try {
+          const { data, error } = await db.getSettings();
+          if (!error && data) {
+            // Update global store settings
+            useGlobalStore.getState().setSettings(data as any);
+          }
+        } catch (error) {
+          console.error('Failed to load settings in LeadDetailPage:', error);
+        }
+      };
+      loadSettings();
+    }
+  }, [settings]);
+
+  // Show loading if settings are not loaded yet
+  if (!settings) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <LoadingSpinner />
+        <span className="ml-2 text-gray-600">Loading settings...</span>
+      </div>
+    );
+  }
 
   // core entities
   const [lead, setLead] = useState<Lead | null>(null);

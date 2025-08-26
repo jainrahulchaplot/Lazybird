@@ -13,6 +13,51 @@ import axios from 'axios';
 import { DocumentProcessor } from './services/documentProcessor.js';
 import { AIEmailGenerator } from './services/aiEmailGenerator.js';
 
+// Add fetch polyfill for Node.js
+import fetch from 'node-fetch';
+global.fetch = fetch;
+
+/* ------------------------------ SHARED UTILITIES ------------------------------ */
+
+/**
+ * Standardize email body formatting across all flows
+ * @param {string} input - Raw email body content
+ * @param {string} mode - 'html' or 'text' (default: 'text')
+ * @returns {string} - Formatted email body
+ */
+function formatEmailBody(input, mode = 'text') {
+  if (!input || typeof input !== 'string') {
+    return '';
+  }
+
+  // Normalize line endings
+  let content = input.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+  if (mode === 'html') {
+    // Convert to HTML format
+    // First, convert double line breaks to paragraph breaks
+    content = content.replace(/\n\s*\n/g, '</p><p>');
+    // Then convert single line breaks to <br> tags
+    content = content.replace(/\n/g, '<br>');
+    // Wrap in paragraph tags
+    content = `<p>${content}</p>`;
+    // Clean up empty paragraphs
+    content = content.replace(/<p><\/p>/g, '');
+    // Clean up consecutive <br> tags
+    content = content.replace(/(<br>){2,}/g, '<br><br>');
+    return content;
+  } else {
+    // Plain text format - ensure consistent paragraph breaks
+    // Replace multiple consecutive line breaks with double line breaks
+    content = content.replace(/\n\s*\n\s*\n+/g, '\n\n');
+    // Ensure paragraphs are separated by double line breaks
+    content = content.replace(/([^\n])\n([^\n])/g, '$1\n\n$2');
+    // Clean up leading/trailing whitespace
+    content = content.trim();
+    return content;
+  }
+}
+
 // AI Configuration utility
 async function getAIConfig() {
   try {
@@ -111,10 +156,10 @@ async function getAIConfig() {
           user_template: "Job Details: Company: {company} Role: {role} Location: {location}"
         },
         company_research: { 
-          system: "You are a business research analyst. Research companies and provide structured information." 
+          system: "You are a business research analyst. Your task is to analyze companies and provide comprehensive insights about their business model, market position, and growth potential. You must return your analysis in valid JSON format with the following structure: {\"company\": \"Company name\", \"business_model\": {\"description\": \"Core business model and revenue streams\", \"revenue_streams\": [\"Primary revenue sources\"], \"key_partners\": [\"Important business partners\"]}, \"market_position\": {\"industry\": \"Primary industry\", \"market_share\": \"Market position and share\", \"competitors\": [\"Main competitors\"], \"unique_selling_propositions\": [\"Key differentiators\"]}, \"growth_potential\": {\"current_trends\": [\"Industry and company trends\"], \"strategic_initiatives\": [\"Growth strategies\"], \"risks\": [\"Potential challenges\"]}, \"financial_performance\": {\"revenue\": {\"latest_year\": \"Revenue figure\", \"growth_rate\": \"Growth percentage\"}, \"profitability\": {\"status\": \"Profit/loss status\", \"key_metrics\": [\"Important financial metrics\"]}}, \"conclusion\": {\"summary\": \"Overall assessment\", \"opportunities\": [\"Growth opportunities\"], \"challenges\": [\"Key challenges\"]}}. Focus on providing actionable insights that would be valuable for job applications and career decisions. Return ONLY valid JSON." 
         },
         fit_analysis: { 
-          system: "You are a career assessment specialist. Analyze job fit and provide insights." 
+          system: "You are a career counselor and job matching specialist. Your task is to analyze how well a candidate fits a specific job opportunity. You must return your analysis in valid JSON format with the following structure: {\"fit_analysis\": {\"company\": \"Company name\", \"role\": \"Job title\", \"location\": \"Job location\", \"seniority\": \"Seniority level\", \"resume_title\": \"Resume filename\", \"focus_areas\": \"Resume focus areas\", \"description\": \"Resume description\", \"fit_score\": \"Overall fit score (0-100)\", \"insights\": {\"relevance\": {\"skills_match\": \"Assessment of skills alignment\", \"experience_match\": \"Assessment of experience relevance\", \"industry_match\": \"Assessment of industry fit\"}, \"seniority_level\": {\"level_match\": \"Assessment of seniority fit\", \"growth_potential\": \"Growth opportunities\"}, \"location\": {\"location_fit\": \"Geographic fit assessment\"}, \"additional_comments\": \"Overall assessment and recommendations\"}}}. Provide specific, actionable insights about strengths, potential challenges, and recommendations for the application. Be honest and constructive in your assessment. Return ONLY valid JSON." 
         },
         thread_reply: {
           system: "You are an expert email strategist and professional communicator. Generate contextual replies in email threads in JSON format: {\"subject\": \"Re: [Subject]\", \"body\": \"...\"}",
@@ -228,6 +273,63 @@ const supabase = createClient(
 
 const app = express();
 const PORT = 3001; // Force port 3001 to match Vite proxy config
+
+// Thread tracking system - stores which threads should be hidden
+let threadTracking = new Map(); // threadId -> { tracked: boolean, hiddenAt: string, systemGenerated: boolean, leadId: string }
+
+// Track system-generated emails
+let systemGeneratedEmails = new Set();
+
+// Initialize thread tracking table
+async function initializeThreadTracking() {
+  try {
+    // Try to create table by attempting to insert a test record
+    // This will fail if table doesn't exist, but we'll handle it gracefully
+    console.log('🔧 Initializing thread tracking system...');
+    
+    // Test if table exists by trying to query it
+    const { error: testError } = await supabase
+      .from('thread_tracking')
+      .select('id')
+      .limit(1);
+
+    if (testError && testError.code === 'PGRST116') {
+      console.log('⚠️ thread_tracking table does not exist - using in-memory storage only');
+      console.log('💡 To enable persistent storage, create the table manually in Supabase');
+      return;
+    }
+
+    // Load existing thread tracking from database
+    const { data: allThreads, error: loadError } = await supabase
+      .from('thread_tracking')
+      .select('thread_id, tracked, hidden_at, system_generated, lead_id, email_type')
+      .eq('user_id', 'me');
+
+    if (loadError) {
+      console.warn('⚠️ Could not load thread tracking:', loadError.message);
+    } else if (allThreads) {
+      allThreads.forEach(thread => {
+        threadTracking.set(thread.thread_id, {
+          tracked: thread.tracked,
+          hiddenAt: thread.hidden_at,
+          systemGenerated: thread.system_generated || false,
+          leadId: thread.lead_id || null,
+          emailType: thread.email_type || null
+        });
+        
+        // Add system-generated emails to the set
+        if (thread.system_generated) {
+          systemGeneratedEmails.add(thread.thread_id);
+        }
+      });
+      console.log(`✅ Loaded ${allThreads.length} thread tracking records from database`);
+      console.log(`✅ Loaded ${systemGeneratedEmails.size} system-generated emails`);
+    }
+  } catch (error) {
+    console.warn('⚠️ Thread tracking initialization failed:', error.message);
+    console.log('ℹ️ Continuing without persistent thread tracking (using in-memory only)');
+  }
+}
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' })); // handle large payloads
@@ -482,7 +584,10 @@ app.post('/api/settings', async (req, res) => {
       gmail_client_id: envGmailClientId,
       gmail_client_secret: envGmailClientSecret,
       gmail_refresh_token: envGmailRefreshToken,
-      gmail_connected: hasGmailCredentials // Always use .env status
+      gmail_connected: hasGmailCredentials, // Always use .env status
+      // Ensure these are never overwritten with empty values
+      openai_configured: Boolean(envOpenAIKey),
+      gmail_configured: hasGmailCredentials
     };
     
     res.json({ success: true, data: responseData });
@@ -1307,22 +1412,46 @@ app.post('/api/openai/company-research', async (req, res) => {
     const aiConfig = await getAIConfig();
     console.log(`🔧 Company research using AI config: model=${aiConfig.defaults.model}, temperature=${aiConfig.defaults.temperature}`);
     
-    const systemPrompt = aiConfig.prompts.company_research.system || `You are a business research analyst. Research the company "${companyName}" and provide comprehensive information in the following JSON format:
+    // 🔍 FETCH KNOWLEDGE BASE DATA FOR CONTEXT
+    let knowledgeBaseContext = '';
+    if (leadId) {
+      try {
+        console.log(`[${reqId}] 🔍 Fetching knowledge base data for lead: ${leadId}`);
+        
+        // Fetch knowledge chunks from vector database
+        const { data: allKnowledgeDocuments, error: knowledgeError } = await supabase
+          .from('documents')
+          .select('*')
+          .or(`title.ilike.%${leadId}%,content.ilike.%${leadId}%`)
+          .order('created_at', { ascending: false });
 
-{
-  "industry": "Company's primary industry",
-  "size": "Company size (e.g., Startup, Series A, Enterprise)",
-  "founded": "Year founded",
-  "headquarters": "HQ location",
-  "funding": "Funding status/amount if applicable",
-  "revenue": "Revenue range if known",
-  "employees": "Employee count range",
-  "website": "Company website",
-  "highlights": ["Key company strengths", "Notable achievements", "Market position"],
-  "recentNews": ["Recent news items", "Product launches", "Company updates"]
-}
-
-Provide accurate, up-to-date information based on your knowledge. If specific details are unknown, use reasonable estimates or "Not specified".`;
+        if (!knowledgeError && allKnowledgeDocuments && allKnowledgeDocuments.length > 0) {
+          const knowledgeChunks = allKnowledgeDocuments
+            .filter(doc => !doc.title.includes('company_research') && !doc.title.includes('fit_analysis'))
+            .slice(0, 10) // Get top 10 relevant chunks
+            .map(doc => ({
+              content: typeof doc.content === 'string' ? doc.content : JSON.stringify(doc.content),
+              metadata: doc.metadata || { source: 'vector_db', title: doc.title }
+            }));
+          
+          if (knowledgeChunks.length > 0) {
+            knowledgeBaseContext = `\n\nCANDIDATE CONTEXT (Use this to tailor company research for job applications):
+${knowledgeChunks.map((chunk, index) => `CHUNK ${index + 1}:
+${chunk.content}
+Metadata: ${JSON.stringify(chunk.metadata)}`).join('\n\n')}`;
+            console.log(`[${reqId}] ✅ Found ${knowledgeChunks.length} knowledge chunks for context`);
+          } else {
+            console.log(`[${reqId}] ℹ️ No relevant knowledge base data found for lead: ${leadId}`);
+          }
+        } else {
+          console.log(`[${reqId}] ℹ️ No knowledge base data found for lead: ${leadId}`);
+        }
+      } catch (error) {
+        console.warn(`[${reqId}] ⚠️ Failed to fetch knowledge base:`, error.message);
+      }
+    }
+    
+    const systemPrompt = aiConfig.prompts.company_research.system || `You are a business research analyst. Your task is to analyze companies and provide comprehensive insights about their business model, market position, and growth potential. You must return your analysis in valid JSON format with the following structure: {\"company\": \"Company name\", \"business_model\": {\"description\": \"Core business model and revenue streams\", \"revenue_streams\": [\"Primary revenue sources\"], \"key_partners\": [\"Important business partners\"]}, \"market_position\": {\"industry\": \"Primary industry\", \"market_share\": \"Market position and share\", \"competitors\": [\"Main competitors\"], \"unique_selling_propositions\": [\"Key differentiators\"]}, \"growth_potential\": {\"current_trends\": [\"Industry and company trends\"], \"strategic_initiatives\": [\"Growth strategies\"], \"risks\": [\"Potential challenges\"]}, \"financial_performance\": {\"revenue\": {\"latest_year\": \"Revenue figure\", \"growth_rate\": \"Growth percentage\"}, \"profitability\": {\"status\": \"Profit/loss status\", \"key_metrics\": [\"Important financial metrics\"]}}, \"conclusion\": {\"summary\": \"Overall assessment\", \"opportunities\": [\"Growth opportunities\"], \"challenges\": [\"Key challenges\"]}}. Focus on providing actionable insights that would be valuable for job applications and career decisions. Return ONLY valid JSON.`;
 
     const completion = await openai.chat.completions.create({
       model: aiConfig.defaults.model || 'gpt-4o-mini',
@@ -1334,7 +1463,7 @@ Provide accurate, up-to-date information based on your knowledge. If specific de
       frequency_penalty: aiConfig.defaults.frequency_penalty || 0.0,
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Please research ${companyName} and provide the requested information.` }
+        { role: 'user', content: `Please research ${companyName} and provide the requested information in JSON format.${knowledgeBaseContext}` }
       ]
     });
 
@@ -1430,23 +1559,44 @@ app.post('/api/openai/fit-analysis', async (req, res) => {
     const aiConfig = await getAIConfig();
     console.log(`🔧 Fit analysis using AI config: model=${aiConfig.defaults.model}, temperature=${aiConfig.defaults.temperature}`);
     
-    const systemPrompt = aiConfig.prompts.fit_analysis.system || `You are a career coach and job application strategist. Analyze the fit between a candidate and a job opportunity.
+    // 🔍 FETCH KNOWLEDGE BASE DATA FOR COMPREHENSIVE ANALYSIS
+    let knowledgeBaseContext = '';
+    try {
+      console.log(`[${reqId}] 🔍 Fetching knowledge base data for lead: ${leadId}`);
+      
+      // Fetch knowledge chunks from vector database
+      const { data: allKnowledgeDocuments, error: knowledgeError } = await supabase
+        .from('documents')
+        .select('*')
+        .or(`title.ilike.%${leadId}%,content.ilike.%${leadId}%`)
+        .order('created_at', { ascending: false });
 
-Based on the lead data and resume information provided, analyze the candidate's fit for this role and provide insights in the following JSON format:
-
-{
-  "overallScore": 85,
-  "strengths": ["Specific strengths that align with the role", "Relevant experience", "Matching skills"],
-  "risks": ["Potential challenges", "Skill gaps", "Experience mismatches"],
-  "gaps": ["Areas that need development", "Missing qualifications", "Experience gaps"],
-  "expectations": {
-    "theirs": ["What the company expects", "Role requirements", "Company culture"],
-    "mine": ["What the candidate should expect", "Growth opportunities", "Challenges"]
-  },
-  "actions": ["Specific action items", "Resume improvements", "Interview preparation tips"]
-}
-
-Provide realistic, actionable insights. Score should be 0-100. Be specific and constructive.`;
+      if (!knowledgeError && allKnowledgeDocuments && allKnowledgeDocuments.length > 0) {
+        const knowledgeChunks = allKnowledgeDocuments
+          .filter(doc => !doc.title.includes('company_research') && !doc.title.includes('fit_analysis'))
+          .slice(0, 15) // Get top 15 relevant chunks for detailed analysis
+          .map(doc => ({
+            content: typeof doc.content === 'string' ? doc.content : JSON.stringify(doc.content),
+            metadata: doc.metadata || { source: 'vector_db', title: doc.title }
+          }));
+        
+        if (knowledgeChunks.length > 0) {
+          knowledgeBaseContext = `\n\nCANDIDATE KNOWLEDGE BASE (Use this detailed information for comprehensive fit analysis):
+${knowledgeChunks.map((chunk, index) => `CHUNK ${index + 1}:
+${chunk.content}
+Metadata: ${JSON.stringify(chunk.metadata)}`).join('\n\n')}`;
+          console.log(`[${reqId}] ✅ Found ${knowledgeChunks.length} knowledge chunks for analysis`);
+        } else {
+          console.log(`[${reqId}] ℹ️ No relevant knowledge base data found for lead: ${leadId}`);
+        }
+      } else {
+        console.log(`[${reqId}] ℹ️ No knowledge base data found for lead: ${leadId}`);
+      }
+    } catch (error) {
+      console.warn(`[${reqId}] ⚠️ Failed to fetch knowledge base:`, error.message);
+    }
+    
+    const systemPrompt = aiConfig.prompts.fit_analysis.system || `You are a career counselor and job matching specialist. Your task is to analyze how well a candidate fits a specific job opportunity. You must return your analysis in valid JSON format with the following structure: {\"fit_analysis\": {\"company\": \"Company name\", \"role\": \"Job title\", \"location\": \"Job location\", \"seniority\": \"Seniority level\", \"resume_title\": \"Resume filename\", \"focus_areas\": \"Resume focus areas\", \"description\": \"Resume description\", \"fit_score\": \"Overall fit score (0-100)\", \"insights\": {\"relevance\": {\"skills_match\": \"Assessment of skills alignment\", \"experience_match\": \"Assessment of experience relevance\", \"industry_match\": \"Assessment of industry fit\"}, \"seniority_level\": {\"level_match\": \"Assessment of seniority fit\", \"growth_potential\": \"Growth opportunities\"}, \"location\": {\"location_fit\": \"Geographic fit assessment\"}, \"additional_comments\": \"Overall assessment and recommendations\"}}}. Provide specific, actionable insights about strengths, potential challenges, and recommendations for the application. Be honest and constructive in your assessment. Return ONLY valid JSON.`;
 
     const userPrompt = `Lead Data:
 Company: ${leadData?.company || 'Not specified'}
@@ -1463,7 +1613,7 @@ Title: ${resumeData.filename || resumeData.name || 'Not provided'}
 Focus Areas: ${resumeData.focus_tags?.join(', ') || 'Not specified'}
 Description: ${resumeData.description || 'Not provided'}` : 'No resume data provided'}
 
-Please analyze the fit and provide insights.`;
+Please analyze the fit and provide insights in JSON format.${knowledgeBaseContext}`;
 
     const completion = await openai.chat.completions.create({
       model: aiConfig.defaults.model || 'gpt-4o-mini',
@@ -1812,7 +1962,7 @@ Please note that this email will NOT be personalized with candidate information.
     return res.json({
       success: true,
       subject: finalEmailDraft.subject,
-      body: finalEmailDraft.body,
+      body: formatEmailBody(finalEmailDraft.body, 'text'),
       generatedAt: finalEmailDraft.generatedAt || new Date().toISOString(),
       usage: completion.usage
     });
@@ -2389,11 +2539,49 @@ app.post('/api/gmail/send', async (req, res) => {
 
     const response = await gmail.users.messages.send(sendRequest);
 
-    console.log(`[${reqId}] ✅ Email sent successfully: ${response.data.id}`);
+    const messageId = response.data.id;
+    const responseThreadId = response.data.threadId || threadId;
+    
+    console.log(`[${reqId}] ✅ Email sent successfully: ${messageId}`);
+    
+    // Track this as a system-generated email
+    systemGeneratedEmails.add(messageId);
+    systemGeneratedEmails.add(responseThreadId);
+    
+    // Store in thread tracking
+    threadTracking.set(responseThreadId, {
+      tracked: true,
+      hiddenAt: null,
+      systemGenerated: true,
+      leadId: null,
+      emailType: 'manual'
+    });
+    
+    // Try to save to database
+    try {
+      await supabase
+        .from('thread_tracking')
+        .upsert({
+          user_id: 'me',
+          thread_id: responseThreadId,
+          tracked: true,
+          system_generated: true,
+          lead_id: null,
+          email_type: 'manual',
+          created_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,thread_id'
+        });
+      console.log(`[${reqId}] ✅ Manual email thread ${responseThreadId} marked as system-generated (persistent)`);
+    } catch (dbError) {
+      console.warn(`[${reqId}] ⚠️ Database save failed (using in-memory only):`, dbError.message);
+      console.log(`[${reqId}] ✅ Manual email thread ${responseThreadId} marked as system-generated (in-memory)`);
+    }
+    
     res.json({ 
       success: true, 
-      id: response.data.id, 
-      threadId: response.data.threadId || threadId 
+      id: messageId, 
+      threadId: responseThreadId 
     });
 
   } catch (error) {
@@ -2941,13 +3129,39 @@ app.post('/api/gmail/thread', async (req, res) => {
         if (messageData.payload?.body?.data) {
           // Full format - decode base64 body
           body = Buffer.from(messageData.payload.body.data, 'base64').toString('utf-8');
+          // Preserve line breaks by normalizing them
+          body = body.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
         } else if (messageData.payload?.parts) {
           // Full format - handle multipart messages
-          const textPart = messageData.payload.parts.find(part => 
-            part.mimeType === 'text/plain' || part.mimeType === 'text/html'
-          );
+          // First try to find text/plain, then text/html
+          let textPart = messageData.payload.parts.find(part => part.mimeType === 'text/plain');
+          if (!textPart) {
+            textPart = messageData.payload.parts.find(part => part.mimeType === 'text/html');
+          }
+          
           if (textPart?.body?.data) {
             body = Buffer.from(textPart.body.data, 'base64').toString('utf-8');
+            // Preserve line breaks by normalizing them
+            body = body.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+            
+            // If it's HTML, convert to plain text
+            if (textPart.mimeType === 'text/html') {
+              // Convert common HTML line breaks to proper line breaks FIRST
+              body = body.replace(/<br\s*\/?>/gi, '\n'); // Convert <br> to line breaks
+              body = body.replace(/<\/p>/gi, '\n\n'); // Convert </p> to double line breaks
+              body = body.replace(/<p[^>]*>/gi, ''); // Remove opening <p> tags
+              body = body.replace(/<\/div>/gi, '\n'); // Convert </div> to line breaks
+              body = body.replace(/<div[^>]*>/gi, ''); // Remove opening <div> tags
+              // Then remove remaining HTML tags
+              body = body.replace(/<[^>]*>/g, ''); // Remove HTML tags
+              body = body.replace(/&nbsp;/g, ' '); // Replace &nbsp; with space
+              body = body.replace(/&amp;/g, '&'); // Replace &amp; with &
+              body = body.replace(/&lt;/g, '<'); // Replace &lt; with <
+              body = body.replace(/&gt;/g, '>'); // Replace &gt; with >
+              body = body.replace(/&quot;/g, '"'); // Replace &quot; with "
+              // Clean up multiple line breaks
+              body = body.replace(/\n\s*\n\s*\n/g, '\n\n'); // Replace 3+ line breaks with 2
+            }
           }
         } else if (messageData.snippet) {
           // Metadata format - use snippet
@@ -3366,18 +3580,29 @@ app.post('/api/gmail/send-application', async (req, res) => {
         // Ensure resumeData is a Buffer
         let resumeBuffer = resumeData;
         if (!Buffer.isBuffer(resumeData)) {
-          if (resumeData instanceof ArrayBuffer) {
-            resumeBuffer = Buffer.from(resumeData);
-          } else if (resumeData instanceof Blob) {
-            console.log('📎 Converting Blob to Buffer...');
-            // For Blob, we need to convert to ArrayBuffer first
-            const arrayBuffer = await resumeData.arrayBuffer();
-            resumeBuffer = Buffer.from(arrayBuffer);
-          } else if (typeof resumeData === 'string') {
-            resumeBuffer = Buffer.from(resumeData, 'utf8');
-          } else {
-            console.warn('⚠️ Unknown resume data type, converting to Buffer');
-            resumeBuffer = Buffer.from(resumeData);
+          console.log('📎 Converting resume data to Buffer. Type:', typeof resumeData, 'Constructor:', resumeData?.constructor?.name);
+          
+          try {
+            if (resumeData instanceof ArrayBuffer) {
+              resumeBuffer = Buffer.from(resumeData);
+            } else if (resumeData && typeof resumeData === 'object' && typeof resumeData.arrayBuffer === 'function') {
+              // Handle Blob or Blob-like objects
+              console.log('📎 Converting Blob-like object to Buffer...');
+              const arrayBuffer = await resumeData.arrayBuffer();
+              resumeBuffer = Buffer.from(arrayBuffer);
+            } else if (typeof resumeData === 'string') {
+              resumeBuffer = Buffer.from(resumeData, 'utf8');
+            } else if (resumeData && typeof resumeData === 'object' && resumeData.data) {
+              // If it's an object with data property
+              resumeBuffer = Buffer.from(resumeData.data);
+            } else {
+              console.warn('⚠️ Unknown resume data type:', typeof resumeData, resumeData?.constructor?.name);
+              // Last resort - try to convert to string and then to buffer
+              resumeBuffer = Buffer.from(String(resumeData));
+            }
+          } catch (error) {
+            console.error('❌ Failed to convert resume data to Buffer:', error);
+            throw new Error(`Invalid resume data format: ${error.message}`);
           }
         }
         
@@ -3431,6 +3656,53 @@ app.post('/api/gmail/send-application', async (req, res) => {
     });
     
     console.log('✅ Email sent successfully:', { messageId: result.data.id });
+    
+    // Track this as a system-generated email
+    const messageId = result.data.id;
+    const threadId = result.data.threadId || messageId; // Use threadId if available, fallback to messageId
+    
+    // Track by both messageId and threadId for compatibility
+    systemGeneratedEmails.add(messageId);
+    systemGeneratedEmails.add(threadId);
+    
+    // Store in thread tracking with system-generated flag
+    threadTracking.set(threadId, {
+      tracked: true,
+      hiddenAt: null,
+      systemGenerated: true,
+      leadId: leadId,
+      emailType: 'application'
+    });
+    
+    // Also track by messageId for backward compatibility
+    threadTracking.set(messageId, {
+      tracked: true,
+      hiddenAt: null,
+      systemGenerated: true,
+      leadId: leadId,
+      emailType: 'application'
+    });
+    
+            // Try to save to database
+        try {
+          await supabase
+            .from('thread_tracking')
+            .upsert({
+              user_id: 'me',
+              thread_id: threadId,
+              tracked: true,
+              system_generated: true,
+              lead_id: leadId,
+              email_type: 'application',
+              created_at: new Date().toISOString()
+            }, {
+              onConflict: 'user_id,thread_id'
+            });
+          console.log(`✅ Thread ${threadId} marked as system-generated (persistent)`);
+        } catch (dbError) {
+          console.warn(`⚠️ Database save failed (using in-memory only):`, dbError.message);
+          console.log(`✅ Thread ${threadId} marked as system-generated (in-memory)`);
+        }
     
     // Update application status
     let applicationId = null;
@@ -4286,6 +4558,129 @@ app.post("/api/lusha/enrich-contact", async (req, res) => {
 
 /* ------------------------------ NEW GMAIL ENDPOINTS ------------------------------ */
 
+// Mark thread as untracked (hidden)
+app.post('/api/gmail/thread/hide', async (req, res) => {
+  const ROUTE = 'POST /api/gmail/thread/hide';
+  const reqId = Math.random().toString(36).slice(2);
+  
+  try {
+    const { threadId } = req.body;
+    
+    if (!threadId) {
+      return res.status(400).json({ success: false, error: 'Thread ID is required' });
+    }
+
+    // Get existing tracking info to preserve system-generated flag
+    const existingTracking = threadTracking.get(threadId);
+    const isSystemGenerated = systemGeneratedEmails.has(threadId) || 
+                             (existingTracking && existingTracking.systemGenerated === true);
+    
+    // Mark thread as hidden in database (if table exists)
+    try {
+      const { error: dbError } = await supabase
+        .from('thread_tracking')
+        .upsert({
+          user_id: 'me',
+          thread_id: threadId,
+          tracked: false,
+          system_generated: isSystemGenerated,
+          lead_id: existingTracking?.leadId || null,
+          email_type: existingTracking?.emailType || null,
+          hidden_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,thread_id'
+        });
+
+      if (dbError) {
+        console.warn(`[${reqId}] ⚠️ Database save failed (using in-memory only):`, dbError.message);
+      } else {
+        console.log(`[${reqId}] ✅ Thread saved to database`);
+      }
+    } catch (dbError) {
+      console.warn(`[${reqId}] ⚠️ Database operation failed (using in-memory only):`, dbError.message);
+    }
+
+    // Update in-memory cache (preserve system-generated info)
+    threadTracking.set(threadId, { 
+      tracked: false, 
+      hiddenAt: new Date().toISOString(),
+      systemGenerated: isSystemGenerated,
+      leadId: existingTracking?.leadId || null,
+      emailType: existingTracking?.emailType || null
+    });
+    
+    console.log(`[${reqId}] ✅ Thread ${threadId} marked as hidden (persistent)`);
+    res.json({ success: true, message: 'Thread hidden successfully' });
+
+  } catch (error) {
+    console.error(`[${reqId}] ❌ ${ROUTE} error:`, error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to hide thread' 
+    });
+  }
+});
+
+// Get hidden threads (for debugging)
+app.get('/api/gmail/threads/hidden', async (req, res) => {
+  const ROUTE = 'GET /api/gmail/threads/hidden';
+  const reqId = Math.random().toString(36).slice(2);
+  
+  try {
+    // Try to get hidden threads from database
+    let hiddenThreads = [];
+    let useInMemory = false;
+    
+    try {
+      const { data: dbHiddenThreads, error: dbError } = await supabase
+        .from('thread_tracking')
+        .select('thread_id, tracked, hidden_at, created_at')
+        .eq('user_id', 'me')
+        .eq('tracked', false)
+        .order('hidden_at', { ascending: false });
+
+      if (dbError) {
+        console.warn(`[${reqId}] ⚠️ Database query failed, using in-memory:`, dbError.message);
+        useInMemory = true;
+      } else {
+        hiddenThreads = dbHiddenThreads || [];
+      }
+    } catch (dbError) {
+      console.warn(`[${reqId}] ⚠️ Database operation failed, using in-memory:`, dbError.message);
+      useInMemory = true;
+    }
+
+    // Fallback to in-memory if database failed
+    if (useInMemory) {
+      hiddenThreads = Array.from(threadTracking.entries())
+        .filter(([_, info]) => info.tracked === false)
+        .map(([threadId, info]) => ({
+          thread_id: threadId,
+          tracked: info.tracked,
+          hidden_at: info.hiddenAt,
+          created_at: info.hiddenAt
+        }));
+    }
+
+    const formattedThreads = hiddenThreads.map(thread => ({
+      threadId: thread.thread_id,
+      tracked: thread.tracked,
+      hiddenAt: thread.hidden_at,
+      createdAt: thread.created_at
+    }));
+    
+    console.log(`[${reqId}] ✅ Found ${formattedThreads.length} hidden threads (${useInMemory ? 'in-memory' : 'database'})`);
+    res.json({ success: true, hiddenThreads: formattedThreads });
+
+  } catch (error) {
+    console.error(`[${reqId}] ❌ ${ROUTE} error:`, error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to get hidden threads' 
+    });
+  }
+});
+
 // Get all sent Gmail threads (for Applications page)
 app.get('/api/gmail/sent', async (req, res) => {
   const ROUTE = 'GET /api/gmail/sent';
@@ -4358,13 +4753,33 @@ app.get('/api/gmail/sent', async (req, res) => {
         // TODO: Implement proper lead-thread association logic
         const leadIds = [];
 
+        // Check if thread is hidden
+        const trackingInfo = threadTracking.get(message.threadId);
+        if (trackingInfo && trackingInfo.tracked === false) {
+          console.log(`[${reqId}] 🚫 Skipping hidden thread: ${message.threadId}`);
+          processedThreadIds.add(message.threadId);
+          continue; // Skip this thread
+        }
+
+        // Show all sent emails by default, but mark system-generated ones
+        const isSystemGenerated = systemGeneratedEmails.has(message.threadId) || 
+                                 (trackingInfo && trackingInfo.systemGenerated === true);
+        
+        // Log for debugging but don't skip
+        if (isSystemGenerated) {
+          console.log(`[${reqId}] ✅ System-generated thread: ${message.threadId}`);
+        } else {
+          console.log(`[${reqId}] 📧 Regular sent thread: ${message.threadId}`);
+        }
+
         const threadSummary = {
           id: message.threadId,
           subject,
           recipients: allRecipients,
           snippet: lastMessage.snippet || 'No preview available',
           updatedAt: date ? new Date(date).toISOString() : new Date().toISOString(),
-          leadIds
+          leadIds,
+          tracked: true // All visible threads are tracked
         };
 
         threads.push(threadSummary);
@@ -4471,9 +4886,24 @@ app.post('/api/gmail/thread/full', async (req, res) => {
       
       if (message.payload?.body?.data) {
         const content = Buffer.from(message.payload.body.data, 'base64').toString('utf8');
-        if (message.payload.mimeType === 'text/html') {
-          html = content;
-        } else {
+                  if (message.payload.mimeType === 'text/html') {
+            html = content;
+            // Convert HTML to text with proper line breaks FIRST
+            text = content.replace(/<br\s*\/?>/gi, '\n'); // Convert <br> to line breaks
+            text = text.replace(/<\/p>/gi, '\n\n'); // Convert </p> to double line breaks
+            text = text.replace(/<p[^>]*>/gi, ''); // Remove opening <p> tags
+            text = text.replace(/<\/div>/gi, '\n'); // Convert </div> to line breaks
+            text = text.replace(/<div[^>]*>/gi, ''); // Remove opening <div> tags
+            // Then remove remaining HTML tags
+            text = text.replace(/<[^>]*>/g, ''); // Remove HTML tags
+            text = text.replace(/&nbsp;/g, ' '); // Replace &nbsp; with space
+            text = text.replace(/&amp;/g, '&'); // Replace &amp; with &
+            text = text.replace(/&lt;/g, '<'); // Replace &lt; with <
+            text = text.replace(/&gt;/g, '>'); // Replace &gt; with >
+            text = text.replace(/&quot;/g, '"'); // Replace &quot; with "
+            // Clean up multiple line breaks
+            text = text.replace(/\n\s*\n\s*\n/g, '\n\n'); // Replace 3+ line breaks with 2
+          } else {
           text = content;
         }
         console.log(`[${reqId}] 📧 Direct body content - Type: ${message.payload.mimeType}, Length: ${content.length}`);
@@ -4484,6 +4914,24 @@ app.post('/api/gmail/thread/full', async (req, res) => {
             const content = Buffer.from(part.body.data, 'base64').toString('utf8');
             if (part.mimeType === 'text/html') {
               html = content;
+              // Convert HTML to text with proper line breaks if no text/plain content
+              if (!text) {
+                // Convert HTML to text with proper line breaks FIRST
+                text = content.replace(/<br\s*\/?>/gi, '\n'); // Convert <br> to line breaks
+                text = text.replace(/<\/p>/gi, '\n\n'); // Convert </p> to double line breaks
+                text = text.replace(/<p[^>]*>/gi, ''); // Remove opening <p> tags
+                text = text.replace(/<\/div>/gi, '\n'); // Convert </div> to line breaks
+                text = text.replace(/<div[^>]*>/gi, ''); // Remove opening <div> tags
+                // Then remove remaining HTML tags
+                text = text.replace(/<[^>]*>/g, ''); // Remove HTML tags
+                text = text.replace(/&nbsp;/g, ' '); // Replace &nbsp; with space
+                text = text.replace(/&amp;/g, '&'); // Replace &amp; with &
+                text = text.replace(/&lt;/g, '<'); // Replace &lt; with <
+                text = text.replace(/&gt;/g, '>'); // Replace &gt; with >
+                text = text.replace(/&quot;/g, '"'); // Replace &quot; with "
+                // Clean up multiple line breaks
+                text = text.replace(/\n\s*\n\s*\n/g, '\n\n'); // Replace 3+ line breaks with 2
+              }
             } else if (part.mimeType === 'text/plain') {
               text = content;
             }
@@ -4846,11 +5294,36 @@ app.post('/api/ai/draft-reply', async (req, res) => {
       let textContent = '';
       if (msg.payload?.body?.data) {
         textContent = Buffer.from(msg.payload.body.data, 'base64').toString('utf8');
+        // Preserve line breaks
+        textContent = textContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
       } else if (msg.payload?.parts) {
-        for (const part of msg.payload.parts) {
-          if (part.mimeType === 'text/plain' && part.body?.data) {
-            textContent = Buffer.from(part.body.data, 'base64').toString('utf8');
-            break;
+        // First try to find text/plain, then text/html
+        let textPart = msg.payload.parts.find(part => part.mimeType === 'text/plain');
+        if (!textPart) {
+          textPart = msg.payload.parts.find(part => part.mimeType === 'text/html');
+        }
+        
+        if (textPart?.body?.data) {
+          textContent = Buffer.from(textPart.body.data, 'base64').toString('utf8');
+          // Preserve line breaks
+          textContent = textContent.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+          
+          // If it's HTML, convert to plain text
+          if (textPart.mimeType === 'text/html') {
+            textContent = textContent.replace(/<[^>]*>/g, ''); // Remove HTML tags
+            textContent = textContent.replace(/&nbsp;/g, ' '); // Replace &nbsp; with space
+            textContent = textContent.replace(/&amp;/g, '&'); // Replace &amp; with &
+            textContent = textContent.replace(/&lt;/g, '<'); // Replace &lt; with <
+            textContent = textContent.replace(/&gt;/g, '>'); // Replace &gt; with >
+            textContent = textContent.replace(/&quot;/g, '"'); // Replace &quot; with "
+            // Convert common HTML line breaks to proper line breaks
+            textContent = textContent.replace(/<br\s*\/?>/gi, '\n'); // Convert <br> to line breaks
+            textContent = textContent.replace(/<\/p>/gi, '\n\n'); // Convert </p> to double line breaks
+            textContent = textContent.replace(/<p[^>]*>/gi, ''); // Remove opening <p> tags
+            textContent = textContent.replace(/<\/div>/gi, '\n'); // Convert </div> to line breaks
+            textContent = textContent.replace(/<div[^>]*>/gi, ''); // Remove opening <div> tags
+            // Clean up multiple line breaks
+            textContent = textContent.replace(/\n\s*\n\s*\n/g, '\n\n'); // Replace 3+ line breaks with 2
           }
         }
       }
@@ -4860,8 +5333,8 @@ app.post('/api/ai/draft-reply', async (req, res) => {
         textContent = msg.snippet;
       }
       
-      // Sanitize and truncate
-      textContent = textContent.replace(/<[^>]*>/g, '').substring(0, 1200);
+      // Sanitize and truncate (but preserve line breaks)
+      textContent = textContent.substring(0, 1200);
       
       return {
         from,
@@ -4955,7 +5428,9 @@ app.post('/api/ai/draft-reply', async (req, res) => {
           .trim(); // Trim whitespace
         
         console.log(`[${reqId}] ✅ Generated thread reply (clean plain text): ${cleanedDraft.substring(0, 100)}...`);
-        return res.json({ success: true, draft: cleanedDraft });
+        // Convert newlines to HTML breaks
+        const htmlDraft = cleanedDraft.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
+        return res.json({ success: true, draft: htmlDraft });
       } else {
         // Email generation might return JSON - try to parse it
         try {
@@ -4969,8 +5444,10 @@ app.post('/api/ai/draft-reply', async (req, res) => {
         }
       }
       
-      console.log(`[${reqId}] ✅ Generated AI draft using OpenAI: ${finalDraft.substring(0, 100)}...`);
-      return res.json({ success: true, draft: finalDraft });
+              console.log(`[${reqId}] ✅ Generated AI draft using OpenAI: ${finalDraft.substring(0, 100)}...`);
+        // Convert newlines to HTML breaks
+        const htmlDraft = finalDraft.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
+        return res.json({ success: true, draft: htmlDraft });
       
     } catch (openaiError) {
       console.warn(`[${reqId}] ⚠️ OpenAI generation failed, falling back to template:`, openaiError.message);
@@ -4992,8 +5469,10 @@ app.post('/api/ai/draft-reply', async (req, res) => {
         draft += `\n\nI have extensive experience in product management and would be happy to discuss specific examples of my work.`;
       }
       
-      console.log(`[${reqId}] ✅ Generated fallback draft for thread: ${threadId} using ${conversationContext.length} messages`);
-      return res.json({ success: true, draft });
+              console.log(`[${reqId}] ✅ Generated fallback draft for thread: ${threadId} using ${conversationContext.length} messages`);
+        // Convert newlines to HTML breaks
+        const htmlDraft = draft.replace(/\n\n/g, '<br><br>').replace(/\n/g, '<br>');
+        return res.json({ success: true, draft: htmlDraft });
     }
 
     console.log(`[${reqId}] ✅ Generated AI draft for thread: ${threadId} using ${conversationContext.length} messages`);
@@ -5120,9 +5599,11 @@ app.post('/api/ai/auto-followup', async (req, res) => {
         
         // Get subject and basic context
         const subject = firstMessage.payload?.headers?.find(h => h.name === 'Subject')?.value || 'No Subject';
-        const companyMatch = subject.match(/at\s+([^(]+)/i);
+        // Clean subject by removing "Re:" prefixes
+        const cleanSubject = subject.replace(/^Re:\s*/i, '').trim();
+        const companyMatch = cleanSubject.match(/at\s+([^(]+)/i);
         const company = companyMatch ? companyMatch[1].trim() : 'the company';
-        const roleMatch = subject.match(/for\s+([^a]+?)\s+at/i);
+        const roleMatch = cleanSubject.match(/for\s+([^a]+?)\s+at/i);
         const role = roleMatch ? roleMatch[1].trim() : 'the position';
         
         // Build thread summary
@@ -5147,7 +5628,14 @@ Tone: professional
 Company: ${company}
 Position: ${role}
 
-Generate a professional, concise follow-up email that shows continued interest and asks for updates on the application status.`;
+Generate a professional, concise follow-up email that shows continued interest and asks for updates on the application status. 
+
+IMPORTANT: 
+1. Return ONLY the email body content as plain text. Do not include subject line or any other formatting.
+2. Do NOT return JSON format - return only the plain text message body.
+3. Use proper paragraph breaks with double line breaks (\\n\\n) between paragraphs.
+4. Focus on the message content only.
+5. Keep the tone professional and concise.`;
         
         const completion = await openai.chat.completions.create({
           model: aiConfig.defaults?.model || 'gpt-4o-mini',
@@ -5161,10 +5649,21 @@ Generate a professional, concise follow-up email that shows continued interest a
         
         console.log(`[${reqId}] ✅ OpenAI completion received:`, completion.choices?.[0]?.message?.content?.substring(0, 100) + '...');
         
-        const followupMessage = completion.choices?.[0]?.message?.content?.trim() || '';
+        let followupMessage = completion.choices?.[0]?.message?.content?.trim() || '';
         
         if (!followupMessage) {
           throw new Error('Empty response from OpenAI');
+        }
+        
+        // Handle case where OpenAI returns JSON despite our instructions
+        if (followupMessage.startsWith('{') && followupMessage.includes('"body"')) {
+          try {
+            const parsed = JSON.parse(followupMessage);
+            followupMessage = parsed.body || followupMessage;
+          } catch (e) {
+            // If parsing fails, use the original message
+            console.warn(`[${reqId}] ⚠️ Failed to parse JSON response, using as-is:`, e.message);
+          }
         }
         
         // Send the follow-up email using Gmail API
@@ -5194,8 +5693,9 @@ Generate a professional, concise follow-up email that shows continued interest a
           // Determine who to send to (if we sent the last email, reply to the other person)
           const recipientEmail = fromEmail.includes('jainrahulchaplot@gmail.com') ? toEmail : fromEmail;
           
-          // Create the email message
-          const emailContent = `From: ${fromEmail}\r\nTo: ${recipientEmail}\r\nSubject: ${subjectHeader?.value || 'Follow-up'}\r\n\r\n${followupMessage}`;
+          // Create the email message with clean subject
+          const cleanSubjectHeader = subjectHeader?.value?.replace(/^Re:\s*/i, '') || 'Follow-up';
+          const emailContent = `From: ${fromEmail}\r\nTo: ${recipientEmail}\r\nSubject: Re: ${cleanSubjectHeader}\r\n\r\n${followupMessage}`;
           const encodedMessage = Buffer.from(emailContent).toString('base64').replace(/\+/g, '-').replace(/\//g, '_');
           
           // Send the email
@@ -5207,13 +5707,48 @@ Generate a professional, concise follow-up email that shows continued interest a
             }
           });
           
-          console.log(`[${reqId}] ✅ Auto-followup email sent successfully: ${sendResponse.data.id}`);
+          const messageId = sendResponse.data.id;
+          console.log(`[${reqId}] ✅ Auto-followup email sent successfully: ${messageId}`);
+          
+          // Track this as a system-generated followup email
+          systemGeneratedEmails.add(messageId);
+          systemGeneratedEmails.add(threadId);
+          
+          // Store in thread tracking
+          threadTracking.set(threadId, {
+            tracked: true,
+            hiddenAt: null,
+            systemGenerated: true,
+            leadId: null, // Will be updated when we have lead context
+            emailType: 'followup'
+          });
+          
+          // Try to save to database
+          try {
+            await supabase
+              .from('thread_tracking')
+              .upsert({
+                user_id: 'me',
+                thread_id: threadId,
+                tracked: true,
+                system_generated: true,
+                lead_id: null,
+                email_type: 'followup',
+                created_at: new Date().toISOString()
+              }, {
+                onConflict: 'user_id,thread_id'
+              });
+            console.log(`[${reqId}] ✅ Followup thread ${threadId} marked as system-generated (persistent)`);
+          } catch (dbError) {
+            console.warn(`[${reqId}] ⚠️ Database save failed (using in-memory only):`, dbError.message);
+            console.log(`[${reqId}] ✅ Followup thread ${threadId} marked as system-generated (in-memory)`);
+          }
           
           return res.json({ 
             success: true, 
             message: 'Auto-followup generated and sent successfully',
-            followup: followupMessage,
-            emailId: sendResponse.data.id
+            followup: formatEmailBody(followupMessage, 'text'),
+            emailId: messageId
           });
           
         } catch (emailError) {
@@ -5801,6 +6336,40 @@ app.use((error, req, res, next) => {
   }
 });
 
+// Gmail OAuth callback endpoint
+app.get('/auth/google/callback', (req, res) => {
+  const { code } = req.query;
+  
+  if (!code) {
+    return res.status(400).send(`
+      <html>
+        <body>
+          <h1>Error: No authorization code received</h1>
+          <p>Please try again.</p>
+          <script>
+            window.opener.postMessage({ type: 'oauth_callback', error: 'No authorization code' }, '*');
+            window.close();
+          </script>
+        </body>
+      </html>
+    `);
+  }
+  
+  // Send the code back to the opener window
+  res.send(`
+    <html>
+      <body>
+        <h1>Authorization successful!</h1>
+        <p>You can close this window now.</p>
+        <script>
+          window.opener.postMessage({ type: 'oauth_callback', code: '${code}' }, '*');
+          window.close();
+        </script>
+      </body>
+    </html>
+  `);
+});
+
 app.use('*', (req, res) => {
   res.status(404).json({
     success: false,
@@ -5840,6 +6409,7 @@ app.use('*', (req, res) => {
         'GET  /api/ai-config/versions',
         'POST /api/ai-config/versions',
         'POST /api/ai-config/versions/rollback',
+        'GET  /auth/google/callback',
       ],
     },
   });
@@ -5847,9 +6417,12 @@ app.use('*', (req, res) => {
 
 /* --------------------------------- START -------------------------------- */
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Backend server running on port ${PORT}`);
   console.log(`📡 Health check: http://localhost:${PORT}/api/health`);
+  
+  // Initialize thread tracking
+  await initializeThreadTracking();
 });
 
 /* --------------------------- DELETE ENDPOINTS ------------------------- */

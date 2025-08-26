@@ -2,6 +2,7 @@ import React from 'react';
 import { Message, Attachment, EmailAddress } from '../../../lib/types/applications';
 import { formatAbsoluteTime, sanitizeHtml, getFileIcon, formatFileSize, getInitials } from '../../../lib/ui/format';
 import { formatEmailAddress } from '../../../lib/utils/parseAddress';
+import { formatEmailBody } from '../../../utils/emailFormatting';
 
 interface ThreadViewProps {
   threadId?: string;
@@ -177,7 +178,22 @@ export const ThreadView: React.FC<ThreadViewProps> = ({
                 }}
               />
             ) : (
-              <p className="whitespace-pre-wrap">{message.text}</p>
+              <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                {(() => {
+                  let content = message.body || message.text;
+                  // Handle JSON objects (for auto-followup messages)
+                  if (typeof content === 'string' && content.startsWith('{') && content.includes('"body"')) {
+                    try {
+                      const parsed = JSON.parse(content);
+                      content = parsed.body || content;
+                    } catch (e) {
+                      // If parsing fails, use the original content
+                    }
+                  }
+                  // Apply consistent formatting
+                  return formatEmailBody(content, 'text');
+                })()}
+              </div>
             )}
 
             {/* Attachments */}

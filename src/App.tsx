@@ -133,14 +133,8 @@ function AppContent() {
         } else {
           // Create default settings if none exist (without hardcoded credentials)
           const { data: newSettings } = await db.updateSettings({
-            openai_api_key: '',
-            gmail_client_id: '',
-            gmail_client_secret: '',
-            gmail_refresh_token: '',
-            gmail_user_email: '',
             tone_default: 'honest',
-            length_default: 'medium',
-            gmail_connected: false
+            length_default: 'medium'
           } as any);
           setSettings(newSettings as any);
         }

@@ -50,6 +50,7 @@ export interface ThreadSummary {
   attachments?: Attachment[];
   messageCount?: number;
   hasIncomingReplies?: boolean;
+  tracked?: boolean; // Track this thread or not (default: true)
 }
 
 export interface SendEmailRequest {
