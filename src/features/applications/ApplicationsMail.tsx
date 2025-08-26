@@ -539,7 +539,10 @@ export const ApplicationsMail: React.FC = () => {
           {selectedThread ? (
             <>
               {/* Thread view */}
-              <div className="flex-1 overflow-hidden">
+              <div className="flex-1 overflow-hidden border-4 border-green-500 bg-green-100">
+                <div className="p-2 bg-green-600 text-white text-xs">
+                  Container Debug: flex-1, overflow-hidden, selectedThread exists
+                </div>
                 <ThreadView
                   threadId={selectedThread.id}
                   subject={selectedThread.subject}
