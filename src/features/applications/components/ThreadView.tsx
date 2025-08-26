@@ -227,42 +227,42 @@ export const ThreadView: React.FC<ThreadViewProps> = ({
               ← Back
             </button>
             <div className="flex-1">
-            <h1 className="text-xl font-semibold text-gray-900 mb-2">
-              {(() => {
-                // Get the original subject from the first message (not the "Re:" subject)
-                if (messages && messages.length > 0) {
-                  const firstMessage = messages[0];
-                  // If first message has a subject that's not "Re: No Subject", use it
-                  if (firstMessage.subject && !firstMessage.subject.includes('Re: No Subject')) {
-                    return firstMessage.subject;
+              <h1 className="text-xl font-semibold text-gray-900 mb-2">
+                {(() => {
+                  // Get the original subject from the first message (not the "Re:" subject)
+                  if (messages && messages.length > 0) {
+                    const firstMessage = messages[0];
+                    // If first message has a subject that's not "Re: No Subject", use it
+                    if (firstMessage.subject && !firstMessage.subject.includes('Re: No Subject')) {
+                      return firstMessage.subject;
+                    }
+                    // Otherwise, try to extract from the original subject if it exists
+                    if (firstMessage.subject && firstMessage.subject.startsWith('Re:')) {
+                      // Remove "Re:" and any extra spaces, but keep the actual subject
+                      const cleanSubject = firstMessage.subject.replace(/^Re:\s*/, '').trim();
+                      return cleanSubject || 'No Subject';
+                    }
                   }
-                  // Otherwise, try to extract from the original subject if it exists
-                  if (firstMessage.subject && firstMessage.subject.startsWith('Re:')) {
-                    // Remove "Re:" and any extra spaces, but keep the actual subject
-                    const cleanSubject = firstMessage.subject.replace(/^Re:\s*/, '').trim();
-                    return cleanSubject || 'No Subject';
-                  }
-                }
-                return subject || 'No Subject';
-              })()}
-            </h1>
-            
-            {/* Recipients */}
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">To:</span>
-              <div className="flex flex-wrap gap-1">
-                {recipients.map((recipient, index) => (
-                  <span
-                    key={index}
-                    className="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-sm"
-                    title={formatEmailAddress(recipient)}
-                  >
-                    {recipient.name || recipient.email}
-                  </span>
-                ))}
+                  return subject || 'No Subject';
+                })()}
+              </h1>
+              
+              {/* Recipients */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600">To:</span>
+                <div className="flex flex-wrap gap-1">
+                  {recipients.map((recipient, index) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-sm"
+                      title={formatEmailAddress(recipient)}
+                    >
+                      {recipient.name || recipient.email}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
 
           <div className="flex gap-2">
             <button
