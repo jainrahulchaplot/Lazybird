@@ -1,12 +1,10 @@
 import { Lead } from '../types/applications';
 import { apiUrls } from '../config';
 
-const API_BASE = apiUrls.leads();
-
 export const leadsApi = {
   // Get all leads
   async getLeads(): Promise<Lead[]> {
-    const response = await fetch(`${API_BASE}/leads`);
+    const response = await fetch(apiUrls.leads());
     if (!response.ok) {
       throw new Error(`Failed to fetch leads: ${response.statusText}`);
     }

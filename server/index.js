@@ -5825,33 +5825,7 @@ app.get('/api/ai/auto-followup/:threadId', async (req, res) => {
   }
 });
 
-// Get all leads endpoint
-app.get('/api/leads', async (req, res) => {
-  const ROUTE = 'GET /api/leads';
-  const reqId = Math.random().toString(36).slice(2);
-  
-  try {
-    console.log(`[${reqId}] ${ROUTE} -> fetching all leads`);
-
-    // TODO: Replace with actual leads from your database
-    // For now, return mock data structure
-    const leads = [
-      { id: 'lead-1', name: 'John Smith', email: 'john.smith@tide.com' },
-      { id: 'lead-2', name: 'Sarah Johnson', email: 'sarah.j@uber.com' },
-      { id: 'lead-3', name: 'Mike Chen', email: 'mike.chen@google.com' }
-    ];
-
-    console.log(`[${reqId}] ✅ Found ${leads.length} leads`);
-    res.json({ success: true, leads });
-
-  } catch (error) {
-    console.error(`[${reqId}] ❌ ${ROUTE} error:`, error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message || 'Failed to fetch leads' 
-    });
-  }
-});
+// This duplicate route has been removed - using the main /api/leads route above
 
 /* ------------------------------ AI CONFIGURATION ENDPOINTS -------------------------- */
 
