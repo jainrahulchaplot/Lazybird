@@ -34,6 +34,107 @@ export const ApplicationsMail: React.FC = () => {
   const [lastRefreshTime, setLastRefreshTime] = useState<string>('');
   const [cacheInitialized, setCacheInitialized] = useState(false);
 
+  // Add mobile-specific error handling and debug logging
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
+
+  // Add debug logging function
+  const addDebugLog = (message: string) => {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] ${message}`;
+    setDebugInfo(prev => [...prev.slice(-9), logMessage]); // Keep last 10 logs
+    console.log(`📱 Mobile Debug: ${message}`);
+  };
+
+  // Enhanced fetch function with mobile-specific handling
+  const fetchWithMobileHandling = async (url: string, options: RequestInit = {}) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout for mobile
+
+    try {
+      addDebugLog(`🔄 Starting fetch to: ${url}`);
+      setIsLoading(true);
+      setError(null);
+
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+      addDebugLog(`✅ Response received: ${response.status} ${response.statusText}`);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      addDebugLog(`✅ Data parsed successfully: ${JSON.stringify(data).substring(0, 100)}...`);
+      return data;
+
+    } catch (error: unknown) {
+      clearTimeout(timeoutId);
+      
+      if (error instanceof Error && error.name === 'AbortError') {
+        const errorMsg = 'Request timed out. Mobile networks can be slow.';
+        addDebugLog(`❌ ${errorMsg}`);
+        setError(errorMsg);
+      } else {
+        const errorMsg = `Failed to load data: ${error instanceof Error ? error.message : 'Unknown error'}`;
+        addDebugLog(`❌ ${errorMsg}`);
+        setError(errorMsg);
+      }
+      
+      console.error('📱 Mobile fetch error:', error);
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Enhanced sent threads fetching
+  const fetchSentThreads = async () => {
+    try {
+      addDebugLog('📧 Fetching sent threads...');
+      const data = await fetchWithMobileHandling('/api/gmail/sent');
+      
+      if (data.success && data.threads) {
+        addDebugLog(`✅ Found ${data.threads.length} sent threads`);
+        setThreads(data.threads); // Use the correct setter
+      } else {
+        throw new Error('Invalid response format from sent threads API');
+      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      addDebugLog(`❌ Failed to fetch sent threads: ${errorMessage}`);
+      setError(`Failed to load sent emails: ${errorMessage}`);
+    }
+  };
+
+  // Enhanced thread fetching
+  const fetchThread = async (threadId: string) => {
+    try {
+      addDebugLog(`📧 Fetching thread: ${threadId}`);
+      const data = await fetchWithMobileHandling('/api/gmail/thread/full', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ threadId })
+      });
+      
+      if (data.success && data.thread) {
+        addDebugLog(`✅ Thread loaded: ${data.thread.messages?.length || 0} messages`);
+        setSelectedThread(data.thread);
+      } else {
+        throw new Error('Invalid response format from thread API');
+      }
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      addDebugLog(`❌ Failed to fetch thread: ${errorMessage}`);
+      setError(`Failed to load thread: ${errorMessage}`);
+    }
+  };
+
   // Delete thread handler
   const handleDeleteThread = async (threadId: string) => {
     if (!confirm('Are you sure you want to delete this thread? This will permanently remove the thread and all its messages.')) {
@@ -324,104 +425,157 @@ export const ApplicationsMail: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex h-screen bg-gray-50">
-      {/* Left Sidebar - Thread List */}
-      <div className="w-96 border-r border-gray-200 bg-white flex flex-col">
-        {/* Header */}
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4">
-              <Button
-                onClick={handleRefresh}
-                disabled={loading || !cacheInitialized}
-                className="flex items-center gap-2"
-              >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                {loading ? 'Refreshing...' : 'Refresh All'}
-              </Button>
-              {lastRefreshTime && (
-                <span className="text-xs text-gray-500">
-                  synced {formatLastRefresh(lastRefreshTime)}
-                </span>
+    <div className="min-h-screen bg-gray-50">
+      {/* Debug Info Panel - Only show on mobile or when errors occur */}
+      {(error || debugInfo.length > 0) && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800">
+                Mobile Debug Information
+              </h3>
+              {error && (
+                <div className="mt-2 text-sm text-yellow-700">
+                  <strong>Error:</strong> {error}
+                </div>
               )}
-              {/* Show thread count */}
-              <span className="text-xs text-gray-500">
-                {threads.length} thread{threads.length !== 1 ? 's' : ''}
-              </span>
+              {debugInfo.length > 0 && (
+                <div className="mt-2">
+                  <details className="text-sm text-yellow-700">
+                    <summary className="cursor-pointer font-medium">View Debug Logs</summary>
+                    <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                      {debugInfo.map((log, index) => (
+                        <div key={index} className="font-mono text-xs bg-yellow-100 p-1 rounded">
+                          {log}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                </div>
+              )}
             </div>
           </div>
+        </div>
+      )}
 
-          {/* Lead filter */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Filter className="w-4 h-4" />
-              <span>Filter by leads</span>
+      {/* Loading Indicator */}
+      {isLoading && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl">
+            <div className="flex items-center space-x-3">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              <div className="text-lg font-medium">Loading...</div>
             </div>
-            <LeadMultiSelect
-              leads={leads}
-              selectedLeadIds={selectedLeadIds}
-              onSelectionChange={setSelectedLeadIds}
-              placeholder="All leads"
-            />
+            <div className="mt-2 text-sm text-gray-600">Please wait, mobile networks can be slow</div>
           </div>
         </div>
+      )}
 
-        {/* Thread list */}
-        <div className="flex-1">
-          <ThreadList
-            threads={filteredThreads}
-            selectedThreadId={selectedThread?.id}
-            onThreadSelect={handleThreadSelect}
-            onDeleteThread={handleDeleteThread}
-            loading={loading}
-            hasMore={hasMore}
-            onLoadMore={handleLoadMore}
-          />
-        </div>
-      </div>
+      {/* Existing content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Left Sidebar - Thread List */}
+        <div className="w-96 border-r border-gray-200 bg-white flex flex-col">
+          {/* Header */}
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-4">
+                <Button
+                  onClick={handleRefresh}
+                  disabled={loading || !cacheInitialized}
+                  className="flex items-center gap-2"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                  {loading ? 'Refreshing...' : 'Refresh All'}
+                </Button>
+                {lastRefreshTime && (
+                  <span className="text-xs text-gray-500">
+                    synced {formatLastRefresh(lastRefreshTime)}
+                  </span>
+                )}
+                {/* Show thread count */}
+                <span className="text-xs text-gray-500">
+                  {threads.length} thread{threads.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+            </div>
 
-      {/* Right Panel - Thread View + Composer */}
-      <div className="flex-1 bg-white flex flex-col">
-        {/* Debug info removed for production */}
-        {selectedThread ? (
-          <>
-            {/* Thread view */}
-            <div className="flex-1 overflow-hidden">
-              <ThreadView
-                threadId={selectedThread.id}
-                subject={selectedThread.subject}
-                messages={selectedThread.messages}
-                recipients={selectedThread.recipients}
-                onReplyAll={handleReplyAll}
-                onDelete={() => handleDeleteThread(selectedThread.id)}
+            {/* Lead filter */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <Filter className="w-4 h-4" />
+                <span>Filter by leads</span>
+              </div>
+              <LeadMultiSelect
+                leads={leads}
+                selectedLeadIds={selectedLeadIds}
+                onSelectionChange={setSelectedLeadIds}
+                placeholder="All leads"
               />
             </div>
-
-            {/* Auto Follow-up Agent */}
-            <AutoFollowupAgent
-              threadId={selectedThread.id}
-              leadId={selectedThread.leadIds?.[0] || ''}
-            />
-
-            {/* Composer */}
-            <Composer
-              threadId={selectedThread.id}
-              recipients={selectedThread.recipients.map(r => r.email)}
-              subject={selectedThread.subject}
-              onSend={handleSendEmail}
-              onGenerateAI={handleGenerateAI}
-              disabled={threadLoading}
-            />
-          </>
-        ) : (
-          <div className="h-full flex items-center justify-center text-gray-500">
-            <div className="text-center">
-              <div className="text-6xl mb-4">📧</div>
-              <p className="text-lg">Select a thread to view details</p>
-              <p className="text-sm text-gray-400 mt-2">selectedThread: {JSON.stringify(selectedThread)}</p>
-            </div>
           </div>
-        )}
+
+          {/* Thread list */}
+          <div className="flex-1">
+            <ThreadList
+              threads={filteredThreads}
+              selectedThreadId={selectedThread?.id}
+              onThreadSelect={handleThreadSelect}
+              onDeleteThread={handleDeleteThread}
+              loading={loading}
+              hasMore={hasMore}
+              onLoadMore={handleLoadMore}
+            />
+          </div>
+        </div>
+
+        {/* Right Panel - Thread View + Composer */}
+        <div className="flex-1 bg-white flex flex-col">
+          {/* Debug info removed for production */}
+          {selectedThread ? (
+            <>
+              {/* Thread view */}
+              <div className="flex-1 overflow-hidden">
+                <ThreadView
+                  threadId={selectedThread.id}
+                  subject={selectedThread.subject}
+                  messages={selectedThread.messages}
+                  recipients={selectedThread.recipients}
+                  onReplyAll={handleReplyAll}
+                  onDelete={() => handleDeleteThread(selectedThread.id)}
+                />
+              </div>
+
+              {/* Auto Follow-up Agent */}
+              <AutoFollowupAgent
+                threadId={selectedThread.id}
+                leadId={selectedThread.leadIds?.[0] || ''}
+              />
+
+              {/* Composer */}
+              <Composer
+                threadId={selectedThread.id}
+                recipients={selectedThread.recipients.map(r => r.email)}
+                subject={selectedThread.subject}
+                onSend={handleSendEmail}
+                onGenerateAI={handleGenerateAI}
+                disabled={threadLoading}
+              />
+            </>
+          ) : (
+            <div className="h-full flex items-center justify-center text-gray-500">
+              <div className="text-center">
+                <div className="text-6xl mb-4">📧</div>
+                <p className="text-lg">Select a thread to view details</p>
+                <p className="text-sm text-gray-400 mt-2">selectedThread: {JSON.stringify(selectedThread)}</p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

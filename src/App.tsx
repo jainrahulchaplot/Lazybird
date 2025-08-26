@@ -275,6 +275,52 @@ function AppContent() {
 }
 
 function App() {
+  // Add mobile-specific error handling
+  const [mobileError, setMobileError] = useState<string | null>(null);
+  const [mobileDebugLogs, setMobileDebugLogs] = useState<string[]>([]);
+
+  // Add mobile debug logging
+  const addMobileDebugLog = (message: string) => {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] ${message}`;
+    setMobileDebugLogs(prev => [...prev.slice(-9), logMessage]); // Keep last 10 logs
+    console.log(`📱 Mobile Debug: ${message}`);
+  };
+
+  // Enhanced error boundary for mobile
+  useEffect(() => {
+    // Detect mobile device
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    if (isMobile) {
+      addMobileDebugLog('📱 Mobile device detected');
+      addMobileDebugLog(`📱 User Agent: ${navigator.userAgent}`);
+      addMobileDebugLog(`📱 Screen: ${window.screen.width}x${window.screen.height}`);
+      addMobileDebugLog(`📱 Viewport: ${window.innerWidth}x${window.innerHeight}`);
+    }
+
+    // Global error handler for mobile
+    const handleGlobalError = (event: ErrorEvent) => {
+      addMobileDebugLog(`❌ Global Error: ${event.message}`);
+      addMobileDebugLog(`❌ Error Source: ${event.filename}:${event.lineno}`);
+      setMobileError(`JavaScript Error: ${event.message}`);
+    };
+
+    // Global unhandled rejection handler
+    const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+      addMobileDebugLog(`❌ Unhandled Promise Rejection: ${event.reason}`);
+      setMobileError(`Promise Error: ${event.reason}`);
+    };
+
+    window.addEventListener('error', handleGlobalError);
+    window.addEventListener('unhandledrejection', handleUnhandledRejection);
+
+    return () => {
+      window.removeEventListener('error', handleGlobalError);
+      window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+    };
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <AppContent />
