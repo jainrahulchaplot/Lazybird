@@ -477,14 +477,23 @@ export const ApplicationsMail: React.FC = () => {
         </div>
       )}
 
-      {/* Existing content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Left Sidebar - Thread List */}
-        <div className="w-96 border-r border-gray-200 bg-white flex flex-col">
+      {/* Main Email Client Layout */}
+      <div className="h-screen flex">
+        {/* Left Panel - Thread List */}
+        <div className={`${selectedThread ? 'hidden md:flex' : 'flex'} w-96 border-r border-gray-200 bg-gray-50 flex-col`}>
           {/* Header */}
           <div className="p-4 border-b border-gray-200">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-4">
+                {/* Mobile menu toggle */}
+                {selectedThread && (
+                  <button
+                    onClick={() => window.history.back()}
+                    className="md:hidden p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    ☰ Menu
+                  </button>
+                )}
                 <Button
                   onClick={handleRefresh}
                   disabled={loading || !cacheInitialized}
@@ -521,7 +530,7 @@ export const ApplicationsMail: React.FC = () => {
           </div>
 
           {/* Thread list */}
-          <div className="flex-1">
+          <div className="flex-1 overflow-y-auto">
             <ThreadList
               threads={filteredThreads}
               selectedThreadId={selectedThread?.id}
@@ -539,10 +548,7 @@ export const ApplicationsMail: React.FC = () => {
           {selectedThread ? (
             <>
               {/* Thread view */}
-              <div className="flex-1 overflow-hidden border-4 border-green-500 bg-green-100">
-                <div className="p-2 bg-green-600 text-white text-xs">
-                  Container Debug: flex-1, overflow-hidden, selectedThread exists
-                </div>
+              <div className="flex-1 overflow-y-auto">
                 <ThreadView
                   threadId={selectedThread.id}
                   subject={selectedThread.subject}
@@ -574,7 +580,6 @@ export const ApplicationsMail: React.FC = () => {
               <div className="text-center">
                 <div className="text-6xl mb-4">📧</div>
                 <p className="text-lg">Select a thread to view details</p>
-                <p className="text-sm text-gray-400 mt-2">selectedThread: {JSON.stringify(selectedThread)}</p>
               </div>
             </div>
           )}

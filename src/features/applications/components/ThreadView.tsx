@@ -215,21 +215,18 @@ export const ThreadView: React.FC<ThreadViewProps> = ({
 
   return (
     <div className="h-full flex flex-col">
-      {/* FORCED VISIBLE DEBUG - This should always show */}
-      <div className="p-4 bg-red-600 text-white text-center font-bold text-xl border-4 border-black">
-        🚨 THREADVIEW COMPONENT IS RENDERING! 🚨
-        <br />
-        Thread ID: {threadId}
-        <br />
-        Messages: {messages?.length || 0}
-        <br />
-        Recipients: {recipients?.length || 0}
-      </div>
-      
       {/* Thread header */}
       <div className="p-6 border-b border-gray-200 bg-white">
         <div className="flex items-start justify-between">
-          <div className="flex-1">
+          <div className="flex items-center gap-3">
+            {/* Back button for mobile */}
+            <button 
+              onClick={() => window.history.back()} 
+              className="md:hidden p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              ← Back
+            </button>
+            <div className="flex-1">
             <h1 className="text-xl font-semibold text-gray-900 mb-2">
               {(() => {
                 // Get the original subject from the first message (not the "Re:" subject)
