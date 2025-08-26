@@ -274,18 +274,25 @@ const supabase = createClient(
 const app = express();
 const PORT = 3001; // Force port 3001 to match Vite proxy config
 
-// Thread tracking system - stores which threads should be hidden
+// Import thread tracking service
+import ThreadTrackingService from './services/threadTrackingService.js';
+
+// Initialize thread tracking service
+let threadTrackingService;
+
+// Thread tracking system - stores which threads should be hidden (fallback)
 let threadTracking = new Map(); // threadId -> { tracked: boolean, hiddenAt: string, systemGenerated: boolean, leadId: string }
 
-// Track system-generated emails
+// Track system-generated emails (fallback)
 let systemGeneratedEmails = new Set();
 
 // Initialize thread tracking table
 async function initializeThreadTracking() {
   try {
-    // Try to create table by attempting to insert a test record
-    // This will fail if table doesn't exist, but we'll handle it gracefully
     console.log('🔧 Initializing thread tracking system...');
+    
+    // Initialize the service
+    threadTrackingService = new ThreadTrackingService(supabase);
     
     // Test if table exists by trying to query it
     const { error: testError } = await supabase
@@ -299,16 +306,11 @@ async function initializeThreadTracking() {
       return;
     }
 
-    // Load existing thread tracking from database
-    const { data: allThreads, error: loadError } = await supabase
-      .from('thread_tracking')
-      .select('thread_id, tracked, hidden_at, system_generated, lead_id, email_type')
-      .eq('user_id', 'me');
-
-    if (loadError) {
-      console.warn('⚠️ Could not load thread tracking:', loadError.message);
-    } else if (allThreads) {
-      allThreads.forEach(thread => {
+    // Load existing thread tracking from database using service
+    const result = await threadTrackingService.getThreadsByUser('me', { limit: 1000 });
+    
+    if (result.success && result.data) {
+      result.data.forEach(thread => {
         threadTracking.set(thread.thread_id, {
           tracked: thread.tracked,
           hiddenAt: thread.hidden_at,
@@ -322,8 +324,10 @@ async function initializeThreadTracking() {
           systemGeneratedEmails.add(thread.thread_id);
         }
       });
-      console.log(`✅ Loaded ${allThreads.length} thread tracking records from database`);
+      console.log(`✅ Loaded ${result.data.length} thread tracking records from database`);
       console.log(`✅ Loaded ${systemGeneratedEmails.size} system-generated emails`);
+    } else {
+      console.warn('⚠️ Could not load thread tracking:', result.error);
     }
   } catch (error) {
     console.warn('⚠️ Thread tracking initialization failed:', error.message);
@@ -4575,26 +4579,36 @@ app.post('/api/gmail/thread/hide', async (req, res) => {
     const isSystemGenerated = systemGeneratedEmails.has(threadId) || 
                              (existingTracking && existingTracking.systemGenerated === true);
     
-    // Mark thread as hidden in database (if table exists)
+    // Mark thread as hidden using service
     try {
-      const { error: dbError } = await supabase
-        .from('thread_tracking')
-        .upsert({
-          user_id: 'me',
-          thread_id: threadId,
-          tracked: false,
-          system_generated: isSystemGenerated,
-          lead_id: existingTracking?.leadId || null,
-          email_type: existingTracking?.emailType || null,
-          hidden_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id,thread_id'
-        });
-
-      if (dbError) {
-        console.warn(`[${reqId}] ⚠️ Database save failed (using in-memory only):`, dbError.message);
+      if (threadTrackingService) {
+        const result = await threadTrackingService.hideThread('me', threadId);
+        if (result.success) {
+          console.log(`[${reqId}] ✅ Thread hidden using service`);
+        } else {
+          console.warn(`[${reqId}] ⚠️ Service hide failed:`, result.error);
+        }
       } else {
-        console.log(`[${reqId}] ✅ Thread saved to database`);
+        // Fallback to direct database operation
+        const { error: dbError } = await supabase
+          .from('thread_tracking')
+          .upsert({
+            user_id: 'me',
+            thread_id: threadId,
+            tracked: false,
+            system_generated: isSystemGenerated,
+            lead_id: existingTracking?.leadId || null,
+            email_type: existingTracking?.emailType || null,
+            hidden_at: new Date().toISOString()
+          }, {
+            onConflict: 'user_id,thread_id'
+          });
+
+        if (dbError) {
+          console.warn(`[${reqId}] ⚠️ Database save failed (using in-memory only):`, dbError.message);
+        } else {
+          console.log(`[${reqId}] ✅ Thread saved to database`);
+        }
       }
     } catch (dbError) {
       console.warn(`[${reqId}] ⚠️ Database operation failed (using in-memory only):`, dbError.message);
