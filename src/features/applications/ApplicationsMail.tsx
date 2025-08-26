@@ -569,7 +569,10 @@ export const ApplicationsMail: React.FC = () => {
 
         {/* Right Panel - Thread View + Composer */}
         <div className="flex-1 bg-white flex flex-col">
-          {/* Debug info removed for production */}
+          {/* Debug info */}
+          <div className="p-2 bg-yellow-100 text-xs text-gray-700 border-b">
+            Debug: selectedThread={selectedThread ? `ID: ${selectedThread.id}, Messages: ${selectedThread.messages?.length || 0}` : 'null'}
+          </div>
           {selectedThread ? (
             <>
               {/* Thread view */}
