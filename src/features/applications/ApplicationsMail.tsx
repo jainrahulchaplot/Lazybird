@@ -27,20 +27,7 @@ export const ApplicationsMail: React.FC = () => {
   
   // Debug: Log state changes
   useEffect(() => {
-    console.log('🔍 selectedThread state changed:', selectedThread);
-    if (selectedThread) {
-      console.log('🔍 Thread details:', {
-        id: selectedThread.id,
-        subject: selectedThread.subject,
-        messagesCount: selectedThread.messages?.length || 0,
-        recipientsCount: selectedThread.recipients?.length || 0,
-        hasMessages: !!selectedThread.messages,
-        hasRecipients: !!selectedThread.recipients
-      });
-      console.log('🔍 Full thread object:', JSON.stringify(selectedThread, null, 2));
-    } else {
-      console.log('🔍 selectedThread is null/undefined');
-    }
+    console.log('selectedThread state changed:', selectedThread);
   }, [selectedThread]);
   const [loading, setLoading] = useState(false);
   const [threadLoading, setThreadLoading] = useState(false);
@@ -252,8 +239,7 @@ export const ApplicationsMail: React.FC = () => {
 
   // Load thread details when selected
   const handleThreadSelect = useCallback(async (threadId: string) => {
-    console.log('🔍 handleThreadSelect called with threadId:', threadId);
-    console.log('🔍 Current threads state:', threads.map(t => ({ id: t.id, subject: t.subject })));
+    console.log('handleThreadSelect called with threadId:', threadId);
     setThreadLoading(true);
     setSelectedThread(null); // Clear previous selection immediately
     
@@ -268,34 +254,12 @@ export const ApplicationsMail: React.FC = () => {
       console.log('Thread from API:', thread);
       
       if (thread) {
-        console.log('🔍 Raw thread data from API:', thread);
-        
         // Validate thread structure
         if (!thread.id || !thread.messages || !Array.isArray(thread.messages)) {
-          console.error('❌ Invalid thread structure:', thread);
-          console.error('❌ Missing fields:', {
-            hasId: !!thread.id,
-            hasMessages: !!thread.messages,
-            messagesIsArray: Array.isArray(thread.messages),
-            messagesLength: thread.messages?.length || 0
-          });
+          console.error('Invalid thread structure:', thread);
           setSelectedThread(null);
           return;
         }
-        
-        // Validate messages structure
-        const validMessages = thread.messages.filter(msg => 
-          msg.id && msg.from && msg.to && Array.isArray(msg.to)
-        );
-        
-        if (validMessages.length !== thread.messages.length) {
-          console.warn('⚠️ Some messages have invalid structure:', {
-            total: thread.messages.length,
-            valid: validMessages.length,
-            invalid: thread.messages.length - validMessages.length
-          });
-        }
-        
         // Cache the thread
         await mailCache.setThread(thread);
       }
@@ -572,17 +536,11 @@ export const ApplicationsMail: React.FC = () => {
 
         {/* Right Panel - Thread View + Composer */}
         <div className="flex-1 bg-white flex flex-col">
-          {/* Debug info */}
-          <div className="p-2 bg-yellow-100 text-xs text-gray-700 border-b">
-            Debug: selectedThread={selectedThread ? `ID: ${selectedThread.id}, Messages: ${selectedThread.messages?.length || 0}` : 'null'}
-          </div>
+          {/* Debug info removed for production */}
           {selectedThread ? (
             <>
               {/* Thread view */}
               <div className="flex-1 overflow-hidden">
-                <div className="p-2 bg-green-100 text-xs text-gray-700 border-b">
-                  Rendering ThreadView with: ID={selectedThread.id}, Messages={selectedThread.messages?.length || 0}, Recipients={selectedThread.recipients?.length || 0}
-                </div>
                 <ThreadView
                   threadId={selectedThread.id}
                   subject={selectedThread.subject}
